@@ -6,3 +6,5 @@ https://github.com/iamyila/NST/blob/master/NatureSceneTracker28.5/NatureSceneTra
 https://github.com/iamyila/NST/blob/master/NDI-cv-mapper_28.5._2.amxd is the corresponding Maxforlive device. 
   
 you will need Ableton live suite 10 + NDI runtime and latest OBS. 
+
+Orginal code by Sebastian Frisch http://freshmania.at/
