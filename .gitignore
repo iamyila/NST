@@ -59,6 +59,8 @@ tests/**/gcc-release/
 # XCode 4
 xcuserdata
 *.xcworkspace
+*.plist
+*.xcconfig
 
 # Code::Blocks
 *.depend
@@ -152,3 +154,6 @@ Desktop.ini
 
 .mailmap
 */bin
+
+config.make
+Makefile
