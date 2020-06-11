@@ -80,7 +80,7 @@ void ofApp::NDIconnect(){
     
     
     auto findSource = [](const string &name_or_url) {
-        auto sources = ofxNDI::listSources();
+        auto sources = ofxNDI::listSources(5000);
         if(name_or_url == "") {
             return make_pair(ofxNDI::Source(), false);
         }
