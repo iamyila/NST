@@ -2,5 +2,3 @@ ofxGui
 ofxNDI
 ofxOpenCv
 ofxOsc
-ofxVectorGraphics
-ofxXmlSettings
