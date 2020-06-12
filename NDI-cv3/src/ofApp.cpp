@@ -22,6 +22,7 @@ void ofApp::setup(){
     for(int i=0; i<10; i++){
         std::shared_ptr<NDIsource> ndi = make_shared<NDIsource>();
         ndi->setup(camWidth, camHeight);
+        ndi->prm.setName("NDI source " + ofToString(i+1));
         gui.add(ndi->prm);
         ndis.emplace_back(ndi);
     }
@@ -164,11 +165,11 @@ void ofApp::keyPressed(int key){
             }
             break;
         case 's':
-                gui.saveToFile("settings.xml");
+            gui.saveToFile("settings.json");
             break;
             
         case 'l':
-                gui.loadFromFile("settings.xml");
+            gui.loadFromFile("settings.json");
             break;
         case 'c':
             NDIconnect();
