@@ -21,7 +21,7 @@ public:
 #else
 		NDIlib_recv_color_format_e color_format=NDIlib_recv_color_format_RGBX_RGBA;
 #endif
-		NDIlib_recv_bandwidth_e bandwidth=NDIlib_recv_bandwidth_lowest;
+		NDIlib_recv_bandwidth_e bandwidth=NDIlib_recv_bandwidth_highest;
 		bool deinterlace=false;
 		std::string name="";
 	};
