@@ -43,41 +43,81 @@ public:
     }
     
     void update(){
-        if (showNDI) {
-            
-            if(receiver.isConnected()) {
-                video.update();
+        if(!showNDI || !receiver.isConnected()) return;
+
+        video.update();
                 
-                if(video.isFrameNew()) {
-                    auto & frame = video.getFrame();
-                    int xres = frame.xres;
-                    int yres = frame.yres;
-                    int format = frame.getOfPixelFormat();
-                    ofLogNotice() << "decode: " <<  xres << "," << yres << ", " << "format " << format;
-                    
-                    if(xres != 0 && yres != 0 ){
-                        video.decodeTo(pixels);
-                        pixels.setImageType(OF_IMAGE_GRAYSCALE);
-                        grayImage.setFromPixels(pixels);
-                        grayImage.scaleIntoMe(grayImageFixed);
+        if(video.isFrameNew()) {
+            frameCounter++;
+            auto & frame = video.getFrame();
+            int xres = frame.xres;
+            int yres = frame.yres;
+            int format = frame.getOfPixelFormat();
+            ofLogNotice() << "decode: " <<  xres << "," << yres << ", " << "format " << format;
+            
+            if(xres != 0 && yres != 0 ){
+                video.decodeTo(pixels);
+                pixels.setImageType(OF_IMAGE_GRAYSCALE);
+                grayImageFixed.setFromPixels(pixels);
+                grayImage.scaleIntoMe(grayImageFixed);
+                
+                if (bgTeachnique == false) {
+                    //Use dynamic BG substraction
+                    grayBg = grayImage;
+                }
+                
+                if(frameCounterBGSet > 0) {
+                    if (frameCounter > frameCounterBGSet) {
+                        grayBg = grayImage;
+                        frameCounter =0;
                     }
                 }
+                // if not Use static BG substraction
+                // find contours which are between the size of 20 pixels and 1/3 the w*h pixels.
+                // also, find holes is set to true so we will get interior contours as well....
+                contourFinder.findContours(grayDiff, minBlobSize, maxBlobSize, 1, false);
             }
         }
+        
+        grayDiff.absDiff(grayBg, grayImage);
+        grayDiff.threshold(bgThreshold);
     }
     
     void draw(){
+        if(!showNDI || !receiver.isConnected()) return;
 
+        ofSetColor(255);
+        //ofImage(pixels).draw(0, 0, 320,240);
+        grayImage.draw(0,0,320,240);
+        grayBg.draw(320,0,320,240);
+        grayDiff.draw(640,0,320,240);
 
-        if (showNDI) {
-            if(receiver.isConnected()) {
-                ofSetColor(255);
-                ofImage(pixels).draw(0, 0, 320,240);
-                grayImage.draw(320,0,320,240);
-                grayBg.draw(640,0,320,240);
-                grayDiff.draw(960,0,320,240);
-            }
+        // contour
+        float camWidth = grayDiff.getWidth();
+        float camHeight = grayDiff.getHeight();
+        ofFill();
+        ofSetHexColor(0x333333);
+        ofDrawRectangle(960,0,320,240);
+        ofPushMatrix();
+        ofTranslate(960, 0);
+        ofScale(320/camWidth, 240/camHeight);
+        ofSetColor(255);
+        for (int k = 0; k < contourFinder.nBlobs; k++){
+            contourFinder.blobs[k].draw(0,0);
+            blobCenter.x = contourFinder.blobs.at(k).centroid.x;
+            blobCenter.y = contourFinder.blobs.at(k).centroid.y;
+            area = contourFinder.blobs.at(k).area/ (camWidth*camHeight);
+            ofColor c;
+            c.setHsb(k * 64, 255, 255);
+            ofSetColor(c);
+            ofDrawCircle(blobCenter, 5);
+            ofSetHexColor(0xffffff);
         }
+        ofPopMatrix();
+        
+        // name of NDI
+       ofSetHexColor(0x00ffff);
+        ofDrawBitmapString(NDI_name, 0, 10);
     }
     
     
@@ -101,6 +141,7 @@ public:
     
     bool exitSender;
     float area;
+    int frameCounter = 0;
     glm::vec2 blobCenter;
     ofParameter<string> NDI_name{"Name", "sender1"};
     ofParameter<bool> showNDI{"Show Stream",true};
