@@ -32,7 +32,7 @@ public:
         grayDiff.allocate(w,h);
 
         // NDI sender
-        if(1){
+        if(ndiOut){
             std::string streamOutName =  prm.getName() + "-Out";
             ofLogNotice() << "Setup NDI sender " << streamOutName;
             if(sender.setup(streamOutName)) {
