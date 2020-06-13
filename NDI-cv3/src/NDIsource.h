@@ -96,39 +96,42 @@ public:
     }
     
     void draw(){
-        if(!showNDI || !receiver.isConnected()) return;
+        if(!showNDI) return;
         
-        ofSetColor(255);
-        //ofImage(pixels).draw(0, 0, 320,240);
-        grayImage.draw(0,0,320,240);
-        grayBg.draw(320,0,320,240);
-        grayDiff.draw(640,0,320,240);
+        if(receiver.isConnected()){
         
-        // contour
-        float camWidth = grayDiff.getWidth();
-        float camHeight = grayDiff.getHeight();
-        ofFill();
-        ofSetHexColor(0x333333);
-        ofDrawRectangle(960,0,320,240);
-        ofPushMatrix();
-        ofTranslate(960, 0);
-        ofScale(320/camWidth, 240/camHeight);
-        ofSetColor(255);
-        for (int k = 0; k < contourFinder.nBlobs; k++){
-            contourFinder.blobs[k].draw(0,0);
-            blobCenter.x = contourFinder.blobs.at(k).centroid.x;
-            blobCenter.y = contourFinder.blobs.at(k).centroid.y;
-            area = contourFinder.blobs.at(k).area/ (camWidth*camHeight);
-            ofColor c;
-            c.setHsb(k * 64, 255, 255);
-            ofSetColor(c);
-            ofDrawCircle(blobCenter, 5);
-            ofSetHexColor(0xffffff);
+            ofSetColor(255);
+            //ofImage(pixels).draw(0, 0, 320,240);
+            grayImage.draw(0,0,320,240);
+            grayBg.draw(320,0,320,240);
+            grayDiff.draw(640,0,320,240);
+            
+            // contour
+            float camWidth = grayDiff.getWidth();
+            float camHeight = grayDiff.getHeight();
+            ofFill();
+            ofSetHexColor(0x333333);
+            ofDrawRectangle(960,0,320,240);
+            ofPushMatrix();
+            ofTranslate(960, 0);
+            ofScale(320/camWidth, 240/camHeight);
+            ofSetColor(255);
+            for (int k = 0; k < contourFinder.nBlobs; k++){
+                contourFinder.blobs[k].draw(0,0);
+                blobCenter.x = contourFinder.blobs.at(k).centroid.x;
+                blobCenter.y = contourFinder.blobs.at(k).centroid.y;
+                area = contourFinder.blobs.at(k).area/ (camWidth*camHeight);
+                ofColor c;
+                c.setHsb(k * 64, 255, 255);
+                ofSetColor(c);
+                ofDrawCircle(blobCenter, 5);
+                ofSetHexColor(0xffffff);
+            }
+            ofPopMatrix();
         }
-        ofPopMatrix();
         
         // name of NDI
-        ofSetHexColor(0x00ffff);
+        receiver.isConnected() ? ofSetHexColor(0x00ffff) : ofSetHexColor(0xff0000);
         ofDrawBitmapString(NDI_name, 0, 10);
     }
     

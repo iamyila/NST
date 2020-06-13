@@ -19,7 +19,7 @@ void ofApp::setup(){
     int camWidth = 640;
     int camHeight = 480;
 
-    for(int i=0; i<3; i++){
+    for(int i=0; i<10; i++){
         std::shared_ptr<NDIsource> ndi = make_shared<NDIsource>();
         ndi->prm.setName("NDI source " + ofToString(i+1));
         gui.add(ndi->prm);
@@ -37,34 +37,40 @@ void ofApp::setup(){
 
 void ofApp::NDIconnect(){
     
-    auto findSource = [](const string &name_or_url) {
-        auto sources = ofxNDI::listSources();
-        if(name_or_url == "") {
-            return make_pair(ofxNDI::Source(), false);
-        }
-        auto found = find_if(begin(sources), end(sources), [name_or_url](const ofxNDI::Source &s) {
-            ofLogNotice() << s.p_ndi_name << ", " << name_or_url;
-            //return s.p_ndi_name == name_or_url;
-            return ofIsStringInString(s.p_ndi_name, name_or_url) || ofIsStringInString(s.p_url_address, name_or_url);
-        });
-        if(found == end(sources)) {
-            ofLogWarning("ofxNDI") << "no NDI source found by string:" << name_or_url;
-            return make_pair(ofxNDI::Source(), false);
-        }
-        return make_pair(*found, true);
-    };
+    ofLogNotice() << "Listing existing NDI sources.." << endl;
+    auto sources = ofxNDI::listSources();
+    ofLogNotice() << "Found " << sources.size() << " sources"<< endl;
+    for(auto & s : sources){
+        ofLogNotice() << s.p_ndi_name;
+    }
     
     for (int i=0; i <ndis.size(); i++){
         shared_ptr<NDIsource> ndi = ndis[i];
-        if (ndi->showNDI == true){
-            string name_or_url = ndi->NDI_name;    // Specify name or address of expected NDI source. In case of blank or not found, receiver will grab default(which is found first) source.
-            auto result = findSource(name_or_url);
-            if(result.second ? ndi->receiver.setup(result.first) : ndi->receiver.setup()) {
-                ofLogNotice() << "Found NDI source " << name_or_url;
+        if (!ndi->showNDI) continue;
+        
+        string name_or_url = ndi->NDI_name;
+        if(name_or_url == "") continue;
+        
+        cout << "Looking for NDI source named : " << name_or_url;
+        
+        bool found = false;
+        for(auto & s : sources){
+            found = ofIsStringInString(s.p_ndi_name, name_or_url) || ofIsStringInString(s.p_url_address, name_or_url);
+            cout << ".";
+            
+            if(found){
+                ndi->receiver.setup(s);
+                cout << " ok!" << endl;
                 ndi->video.setup(ndi->receiver);
+                break;
             }
         }
+        
+        if(!found) cout << " Not found" << endl;
+        //ndi->receiver.setup();
     }
+    
+    cout << endl;
 }
 
 //--------------------------------------------------------------
