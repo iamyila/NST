@@ -76,6 +76,8 @@ void ofApp::NDIconnect(){
 //--------------------------------------------------------------
 void ofApp::update(){
     
+    ofSetFrameRate(fps);
+    
     for (int i=0; i<ndis.size(); i++){
         ndis[i]->update();
     }
