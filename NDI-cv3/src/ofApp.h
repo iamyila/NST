@@ -4,6 +4,7 @@
 #include "ofxOsc.h"
 #include "ofxGui.h"
 #include "NDIsource.h"
+#include "AppParam.h"
 
 class ofApp : public ofBaseApp{
 	
@@ -18,11 +19,11 @@ public:
     
     vector<std::shared_ptr<NDIsource>> ndis;
     
-    ofxIntSlider fps;
     ofxButton NDIConnectButton;
     ofxPanel gui;
     
     bool bHide = false;
-    
     ofSoundPlayer ring;
+    
+    mtb::AppParam appPrm;
 };
