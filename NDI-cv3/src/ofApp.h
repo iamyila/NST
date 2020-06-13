@@ -18,7 +18,7 @@ public:
     
     vector<std::shared_ptr<NDIsource>> ndis;
     
-    //ofxIntSlider fps;
+    ofxIntSlider fps;
     ofxButton NDIConnectButton;
     ofxPanel gui;
     

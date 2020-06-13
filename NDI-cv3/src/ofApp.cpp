@@ -13,7 +13,7 @@ void ofApp::setup(){
     NDIConnectButton.addListener(this, &ofApp::NDIConnectButtonPressed);
     
     gui.setup("settings", "settings.json");
-    //gui.add(fps.setup("FPS", 25, 1, 60));
+    gui.add(fps.setup("FPS", 25, 1, 60));
     gui.add(NDIConnectButton.setup("NDIConnect"));
 
     int camWidth = 640;
