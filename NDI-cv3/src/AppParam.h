@@ -66,7 +66,7 @@ namespace mtb {
 		ofParameter<std::string> logLevel{ "Log Level", "OF_LOG_SILENT" };
         //ofParameter<bool> bStart{ "Start", false };
 		//ofParameter<bool> bDebug{ "Debug", true };
-		ofParameter<int> targetFps{ "Target FPS", 50, 0, 500 };
+		ofParameter<int> targetFps{ "Target FPS", 50, 0, 60 };
 		ofParameter<int> fps{ "FPS", -1, 0, 500 };
 		ofParameter<bool> bAntiAliasing{ "Anti Aliasing", true };
 		ofParameter<bool> bDepthTest{ "Depth Test", false };
