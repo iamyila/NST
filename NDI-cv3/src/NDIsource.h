@@ -54,45 +54,44 @@ public:
     }
     
     void update(){
-        if(!showNDI || !receiver.isConnected()) return;
+        if(showNDI){
+            if(receiver.isConnected()){
+                video.update();
         
-        video.update();
-        
-        if(video.isFrameNew()) {
-            frameCounter++;
-            auto & frame = video.getFrame();
-            int xres = frame.xres;
-            int yres = frame.yres;
-            int format = frame.getOfPixelFormat();
-            
-            if(xres != 0 && yres != 0 ){
-                video.decodeTo(pixels);
-                pixels.setImageType(OF_IMAGE_GRAYSCALE);
-                grayImageFixed.setFromPixels(pixels);
-                grayImage.scaleIntoMe(grayImageFixed);
-                
-                if (bgTeachnique == false) {
-                    //Use dynamic BG substraction
-                    grayBg = grayImage;
-                }
-                
-                if(frameCounterBGSet > 0) {
-                    if (frameCounter > frameCounterBGSet) {
-                        grayBg = grayImage;
-                        frameCounter =0;
+                if(video.isFrameNew()) {
+                    frameCounter++;
+                    auto & frame = video.getFrame();
+                    int xres = frame.xres;
+                    int yres = frame.yres;
+                    
+                    if(xres != 0 && yres != 0 ){
+                        video.decodeTo(pixels);
+                        pixels.setImageType(OF_IMAGE_GRAYSCALE);
+                        grayImageFixed.setFromPixels(pixels);
+                        grayImage.scaleIntoMe(grayImageFixed);
                     }
                 }
-                // if not Use static BG substraction
-                // find contours which are between the size of 20 pixels and 1/3 the w*h pixels.
-                // also, find holes is set to true so we will get interior contours as well....
-                contourFinder.findContours(grayDiff, minBlobSize, maxBlobSize, 1, false);
-            }else{
-                ofLogWarning() << "decode: " <<  xres << "," << yres << ", " << "format " << format;
+
+                grayDiff.absDiff(grayBg, grayImage);
+                grayDiff.threshold(bgThreshold);
             }
+            
+            if (bgTeachnique == false) {
+                //Use dynamic BG substraction
+                grayBg = grayImage;
+            }
+                        
+            if(frameCounterBGSet > 0) {
+                if (frameCounter > frameCounterBGSet) {
+                    grayBg = grayImage;
+                    frameCounter =0;
+                }
+            }
+            // if not Use static BG substraction
+            // find contours which are between the size of 20 pixels and 1/3 the w*h pixels.
+            // also, find holes is set to true so we will get interior contours as well....
+            contourFinder.findContours(grayDiff, minBlobSize, maxBlobSize, 1, false);
         }
-        
-        grayDiff.absDiff(grayBg, grayImage);
-        grayDiff.threshold(bgThreshold);
     }
     
     void draw(){
