@@ -19,7 +19,7 @@ void ofApp::setup(){
     int camWidth = 640;
     int camHeight = 480;
 
-    for(int i=0; i<4; i++){
+    for(int i=0; i<10; i++){
         std::shared_ptr<NDIsource> ndi = make_shared<NDIsource>();
         ndi->prm.setName("NDI source " + ofToString(i+1));
         gui.add(ndi->prm);
@@ -81,6 +81,10 @@ void ofApp::update(){
     
     for (int i=0; i<ndis.size(); i++){
         ndis[i]->update();
+    }
+    
+    for (int i=0; i<ndis.size(); i++){
+        ndis[i]->findContour();
     }
 }
 

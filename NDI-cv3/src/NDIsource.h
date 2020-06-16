@@ -118,7 +118,7 @@ public:
             // contour
             ofxCv::RectTracker& tracker = contourFinder.getTracker();
 
-            if(0){
+            if(1){
                 // send /on, /off osc message
                 ofxOscBundle bundle;
                 const vector<unsigned int>& newLabels = tracker.getNewLabels();
@@ -172,48 +172,45 @@ public:
                     
                     ofSetLineWidth(1);
                     ofNoFill();
+                    
+                    ofPushMatrix();
+                    ofScale(320/camWidth, 240/camHeight);
 
-                    {
-                        ofPushMatrix();
-                        ofScale(320/camWidth, 240/camHeight);
+                    ofColor c;
+                    c.setHsb(label*10%255, 255, 255);
+                    ofSetColor(c);
 
-                        ofColor c;
-                        c.setHsb(label*10%255, 255, 255);
-                        ofSetColor(c);
-
-                        // Polylines
-                        for(auto & p: polys){
-                            p.draw();
-                        }
-
-                        ofTranslate(center);
-                        
-                        // Bounding Box
-                        ofSetRectMode(OF_RECTMODE_CENTER);
-                        ofDrawRectangle(0, 0, rect.width, rect.height);
-                        ofSetRectMode(OF_RECTMODE_CORNER);
-                        
-                        // text
-                        string msg = ofToString(label) + ":" + ofToString(tracker.getAge(label));
-                        ofDrawBitmapString(msg, 0, 0);
-                        
-                        // velocity line
-                        ofDrawLine(0, 0, velocity.x*4, velocity.y*4);
-                        ofPopMatrix();
-                        
-                        // OSC
-                        {
-                            ofxOscMessage m;
-                            m.setAddress(oscAddress);
-                            m.addIntArg(label);
-                            m.addFloatArg(center.x/camWidth);
-                            m.addFloatArg(center.y/camHeight);
-                            m.addFloatArg(glm::length(velocity));
-                            m.addFloatArg(area);
-                            m.addIntArg(age);
-                            bundle.addMessage(m);
-                        }
+                    // Polylines
+                    for(auto & p: polys){
+                        p.draw();
                     }
+
+                    ofTranslate(center);
+                    
+                    // Bounding Box
+                    ofSetRectMode(OF_RECTMODE_CENTER);
+                    ofDrawRectangle(0, 0, rect.width, rect.height);
+                    ofSetRectMode(OF_RECTMODE_CORNER);
+                    
+                    // text
+                    string msg = ofToString(label) + ":" + ofToString(tracker.getAge(label));
+                    ofDrawBitmapString(msg, 0, 0);
+                    
+                    // velocity line
+                    ofDrawLine(0, 0, velocity.x*4, velocity.y*4);
+                    ofPopMatrix();
+                    
+                    // OSC
+                    ofxOscMessage m;
+                    m.setAddress(oscAddress);
+                    m.addIntArg(label);
+                    m.addFloatArg(center.x/camWidth);
+                    m.addFloatArg(center.y/camHeight);
+                    m.addFloatArg(glm::length(velocity));
+                    m.addFloatArg(area);
+                    m.addIntArg(age);
+                    bundle.addMessage(m);
+                
                 }else {
                     ofPushMatrix();
                     ofScale(320/camWidth, 240/camHeight);
@@ -226,11 +223,12 @@ public:
                 }
             }
             ofPopMatrix();
-            
+    
             if(bundle.getMessageCount()>0){
                 oscSender.sendBundle(bundle);
             }
         }
+        
         
         // name of NDI
         receiver.isConnected() ? ofSetHexColor(0x00ffff) : ofSetHexColor(0xff0000);
