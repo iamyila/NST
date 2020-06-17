@@ -217,7 +217,7 @@ public:
                     ofTranslate(center);
                     ofSetColor(255, 50);
                     ofSetRectMode(OF_RECTMODE_CENTER);
-                    ofDrawRectangle(rect);
+                    ofDrawRectangle(0, 0, rect.width, rect.height);
                     ofSetRectMode(OF_RECTMODE_CORNER);
                     ofPopMatrix();
                 }
