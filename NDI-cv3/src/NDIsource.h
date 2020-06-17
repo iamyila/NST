@@ -157,13 +157,31 @@ public:
             
             ofxOscBundle bundle;
 
+            std::vector<pair<int, int>> ages;
+            ages.reserve(contourFinder.size());
+            
             for (int i=0; i<contourFinder.size(); i++){
-
                 int label = contourFinder.getLabel(i);
                 int age = tracker.getAge(label);
+                ages.emplace_back(make_pair(i, age));
+            }
+            
+            std::sort(ages.begin(), ages.end(),
+                      [](pair<int,int> & a,
+                         pair<int,int> & b){
+                          return a.second > b.second;
+                      });
+
+            // debug
+            // for(auto & a: ages){ cout << std::get<1>(a) << ","; } cout << endl;
+            
+            int n = MIN(maxBlobNum.get(), ages.size());
+            for(int j=0; j<n; j++){
+                int i = ages[j].first;
+                int age = ages[j].second;
+                int label = contourFinder.getLabel(i);
                 glm::vec2 center = ofxCv::toOf(contourFinder.getCenter(i));
                 const ofRectangle & rect = ofxCv::toOf(contourFinder.getBoundingRect(i));
-                
                 if(age > minAge){
 
                     glm::vec2 velocity = ofxCv::toOf(contourFinder.getVelocity(i));
@@ -288,7 +306,8 @@ public:
     ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 300 };
     ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
     ofParameter<int> minAge{ "min age", 15, 1, 60 };
-    ofParameterGroup trackerGrp{ "Tracker", minAreaRadius, maxAreaRadius, bAutoThreshold, threshold, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, minAge };
+    ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 30 };
+    ofParameterGroup trackerGrp{ "Tracker", minAreaRadius, maxAreaRadius, bAutoThreshold, threshold, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, minAge, maxBlobNum };
     
     ofParameter<string> oscAddress{"oscAddress", "NDITracker"};
     ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut,bgTeachnique, bgThreshold, frameCounterBGSet, audienceFlip, trackerGrp, oscAddress};
