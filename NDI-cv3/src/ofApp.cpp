@@ -117,7 +117,11 @@ void ofApp::keyPressed(int key){
         case 'h':
             bHide = !bHide;
             break;
-            
+
+        case 'f':
+            ofToggleFullscreen();
+            break;
+
         case ' ':
             for (int i=0; i<ndis.size(); i++){
                 ndis[i]->bLearnBakground = true;
