@@ -126,14 +126,14 @@ public:
                 for(int i = 0; i < newLabels.size(); i++) {
                     int label = newLabels[i];
                     ofxOscMessage m;
-                    m.setAddress(oscAddress.get()+"/on");
+                    m.setAddress(oscAddress.get()+ "/" + ofToString(label%maxBlobNum+1) +"/on");
                     m.addIntArg(label);
                     bundle.addMessage(m);
                 }
                 for(int i = 0; i < deadLabels.size(); i++) {
                     int label = deadLabels[i];
                     ofxOscMessage m;
-                    m.setAddress(oscAddress.get()+"/off");
+                    m.setAddress(oscAddress.get() + "/"+ ofToString(label%maxBlobNum+1) +"/off");
                     m.addIntArg(label);
                     bundle.addMessage(m);
                 }
@@ -220,7 +220,7 @@ public:
                     
                     // OSC
                     ofxOscMessage m;
-                    m.setAddress(oscAddress);
+                    m.setAddress(oscAddress.get() + "/" + ofToString(label%maxBlobNum+1) +"/val");
                     m.addIntArg(label);
                     m.addFloatArg(center.x/camWidth);
                     m.addFloatArg(center.y/camHeight);
