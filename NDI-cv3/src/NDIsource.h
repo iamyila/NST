@@ -51,6 +51,14 @@ public:
         
         // OSC Sender
         oscSender.setup(HOST, PORT);
+        
+        listenerHolder.push(bgTeachnique.newListener([&](bool & b){
+            if(bgTeachnique){
+                grayBg = grayImage;
+            }else{
+                grayBg.clear();
+            }
+        }));
     }
     
     void update(){
@@ -72,20 +80,22 @@ public:
                     }
                 }
 
-                grayDiff.absDiff(grayBg, grayImage);
-                grayDiff.threshold(bgThreshold);
-            }
-            
-            
-            if (bgTeachnique == false || bLearnBakground) {
-                grayBg = grayImage;
-                bLearnBakground = false;
-            }else{
-                if(frameCounterBGSet > 0) {
-                    if (frameCounter > frameCounterBGSet) {
+                if(bgTeachnique){
+                    grayDiff.absDiff(grayBg, grayImage);
+                    grayDiff.threshold(bgThreshold);
+
+                    if (bLearnBakground) {
                         grayBg = grayImage;
-                        frameCounter =0;
+                        bLearnBakground = false;
                     }
+                    if(frameCounterBGSet > 0) {
+                        if (frameCounter > frameCounterBGSet) {
+                            grayBg = grayImage;
+                            frameCounter =0;
+                        }
+                    }
+                }else{
+                    grayBg.clear();
                 }
             }
         }
@@ -100,7 +110,7 @@ public:
             contourFinder.setFindHoles(bFindHoles);
             contourFinder.setSimplify(bSimplify);
             contourFinder.setAutoThreshold(bAutoThreshold);
-            contourFinder.findContours(grayDiff);
+            contourFinder.findContours( bgTeachnique ? grayDiff : grayImage);
         }
     }
     
@@ -110,10 +120,18 @@ public:
         if(receiver.isConnected()){
         
             ofSetColor(255);
-            //ofImage(pixels).draw(0, 0, 320,240);
             grayImage.draw(0,0,320,240);
-            grayBg.draw(320,0,320,240);
-            grayDiff.draw(640,0,320,240);
+            if(bgTeachnique){
+                grayBg.draw(320,0,320,240);
+                grayDiff.draw(640,0,320,240);
+            }else{
+                ofNoFill();
+                ofSetColor(255);
+                ofDrawRectangle(320, 0, 320, 240);
+                ofDrawLine(320, 0, 640, 240);
+                ofDrawLine(320, 240, 640, 0);
+                grayImage.draw(640, 0, 320, 240);
+            }
             
             // contour
             ofxCv::RectTracker& tracker = contourFinder.getTracker();
@@ -145,15 +163,9 @@ public:
             
             float camWidth = grayDiff.getWidth();
             float camHeight = grayDiff.getHeight();
-            if(0){
-                ofFill();
-                ofSetHexColor(0x333333);
-                ofDrawRectangle(960,0,320,240);
-            }
+            
             ofPushMatrix();
             ofTranslate(640, 0);
-            //ofScale(320/camWidth, 240/camHeight);
-            ofSetColor(255);
             
             ofxOscBundle bundle;
 
@@ -247,7 +259,6 @@ public:
             }
         }
         
-        
         // name of NDI
         receiver.isConnected() ? ofSetHexColor(0x00ffff) : ofSetHexColor(0xff0000);
         ofDrawBitmapString(NDI_name, 0, 10);
@@ -273,7 +284,6 @@ public:
     ofxCvGrayscaleImage grayImageFixed;
     ofxCvGrayscaleImage grayBg;
     ofxCvGrayscaleImage grayDiff;
-    //ofxCvContourFinder contourFinder;
     ofxCv::ContourFinder contourFinder;
     
     // send
@@ -305,10 +315,12 @@ public:
     ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
     ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 300 };
     ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
-    ofParameter<int> minAge{ "min age", 15, 1, 60 };
+    ofParameter<int> minAge{ "min age", 15, 0, 60 };
     ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 30 };
     ofParameterGroup trackerGrp{ "Tracker", minAreaRadius, maxAreaRadius, bAutoThreshold, threshold, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, minAge, maxBlobNum };
     
     ofParameter<string> oscAddress{"oscAddress", "NDITracker"};
     ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut,bgTeachnique, bgThreshold, frameCounterBGSet, audienceFlip, trackerGrp, oscAddress};
+    
+    ofEventListeners listenerHolder;
 };

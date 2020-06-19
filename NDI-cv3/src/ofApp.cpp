@@ -2,23 +2,15 @@
 
 using namespace ofxNDI::Recv;
 
-//--------------------------------------------------------------
 void ofApp::setup(){
 
-    ofSetFrameRate(60);
-    ofSetVerticalSync(true);
-    
     NDIlib_initialize();
 
-    NDIConnectButton.addListener(this, &ofApp::NDIConnectButtonPressed);
-    
     gui.setup("settings", "settings.json");
     gui.add(appPrm.grp);
-    gui.add(NDIConnectButton.setup("NDIConnect"));
-
-    int camWidth = 640;
-    int camHeight = 480;
-
+    gui.add(connectNDIBtn);
+    listenerHolder.push(connectNDIBtn.newListener([&](void){ connectNDI();}));
+    
     for(int i=0; i<10; i++){
         std::shared_ptr<NDIsource> ndi = make_shared<NDIsource>();
         ndi->prm.setName("NDI source " + ofToString(i+1));
@@ -29,14 +21,15 @@ void ofApp::setup(){
     gui.loadFromFile("settings.json");
     gui.minimizeAll();
 
+    int camWidth = 640;
+    int camHeight = 480;
     for(int i=0; i<ndis.size(); i++){
         ndis[i]->setup(camWidth, camHeight);
     }
-    NDIconnect();
+    connectNDI();
 }
 
-
-void ofApp::NDIconnect(){
+void ofApp::connectNDI(){
     
     ofLogNotice() << "Listing existing NDI sources.." << endl;
     auto sources = ofxNDI::listSources();
@@ -74,7 +67,6 @@ void ofApp::NDIconnect(){
     cout << endl;
 }
 
-//--------------------------------------------------------------
 void ofApp::update(){
     
     appPrm.set();
@@ -88,8 +80,6 @@ void ofApp::update(){
     }
 }
 
-
-//--------------------------------------------------------------
 void ofApp::draw(){
     
     for (int i=0; i<ndis.size(); i++){
@@ -109,7 +99,6 @@ void ofApp::draw(){
     }
 }
 
-//--------------------------------------------------------------
 void ofApp::keyPressed(int key){
 
     switch (key){
@@ -135,15 +124,8 @@ void ofApp::keyPressed(int key){
             gui.loadFromFile("settings.json");
             break;
         case 'c':
-            NDIconnect();
+            connectNDI();
             break;
     }
-}
-void ofApp::NDIConnectButtonPressed(){
-    NDIconnect();
-}
-
-void ofApp::exit(){
-    NDIConnectButton.removeListener(this, &ofApp::NDIConnectButtonPressed);
 }
 

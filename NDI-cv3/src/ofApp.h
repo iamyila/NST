@@ -12,18 +12,15 @@ public:
 	void setup();
 	void update();
 	void draw();
-    void NDIconnect();
+    void connectNDI();
 	void keyPressed(int key);
-    void exit();
-    void NDIConnectButtonPressed();
-    
-    vector<std::shared_ptr<NDIsource>> ndis;
-    
-    ofxButton NDIConnectButton;
-    ofxPanel gui;
     
     bool bHide = false;
-    ofSoundPlayer ring;
-    
+    vector<std::shared_ptr<NDIsource>> ndis;
+
+    ofxPanel gui;
     mtb::AppParam appPrm;
+
+    ofParameter<void> connectNDIBtn{"Connect NDI"};
+    ofEventListeners listenerHolder;
 };
