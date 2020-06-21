@@ -30,7 +30,7 @@ public:
         
         grayImage.allocate(w,h);
         grayBg.allocate(w,h);
-        grayDiff.allocate(w,h);
+        grayFinal.allocate(w,h);
 
         // NDI sender
         if(ndiOut){
@@ -52,8 +52,8 @@ public:
         // OSC Sender
         oscSender.setup(HOST, PORT);
         
-        listenerHolder.push(bgTeachnique.newListener([&](bool & b){
-            if(bgTeachnique){
+        listenerHolder.push(bUseFD.newListener([&](bool & b){
+            if(bUseFD){
                 grayBg = grayImage;
             }else{
                 grayBg.clear();
@@ -67,7 +67,6 @@ public:
                 video.update();
         
                 if(video.isFrameNew()) {
-                    frameCounter++;
                     auto & frame = video.getFrame();
                     int xres = frame.xres;
                     int yres = frame.yres;
@@ -78,24 +77,25 @@ public:
                         grayImageFixed.setFromPixels(pixels);
                         grayImage.scaleIntoMe(grayImageFixed);
                     }
-                }
 
-                if(bgTeachnique){
-                    grayDiff.absDiff(grayBg, grayImage);
-                    grayDiff.threshold(bgThreshold);
+                    if(bUseFD){
+                        grayFinal.absDiff(grayBg, grayImage);
+                        grayFinal.threshold(bgThreshold);
 
-                    if (bLearnBakground) {
-                        grayBg = grayImage;
-                        bLearnBakground = false;
-                    }
-                    if(frameCounterBGSet > 0) {
-                        if (frameCounter > frameCounterBGSet) {
+                        if (bLearnBakground) {
+                            grayBg = grayImage;
+                            bLearnBakground = false;
+                        }
+                        if (frameCounter >= fdUpdateFrame) {
                             grayBg = grayImage;
                             frameCounter =0;
                         }
+                    }else{
+                        grayBg.clear();
+                        grayFinal = grayImage;
                     }
-                }else{
-                    grayBg.clear();
+                    
+                    frameCounter++;
                 }
             }
         }
@@ -110,7 +110,7 @@ public:
             contourFinder.setFindHoles(bFindHoles);
             contourFinder.setSimplify(bSimplify);
             contourFinder.setAutoThreshold(bAutoThreshold);
-            contourFinder.findContours( bgTeachnique ? grayDiff : grayImage);
+            contourFinder.findContours(grayFinal);
         }
     }
     
@@ -121,9 +121,9 @@ public:
         
             ofSetColor(255);
             grayImage.draw(0,0,320,240);
-            if(bgTeachnique){
+            if(bUseFD){
                 grayBg.draw(320,0,320,240);
-                grayDiff.draw(640,0,320,240);
+                grayFinal.draw(640,0,320,240);
             }else{
                 ofNoFill();
                 ofSetColor(255);
@@ -161,8 +161,8 @@ public:
                 }
             }
             
-            float camWidth = grayDiff.getWidth();
-            float camHeight = grayDiff.getHeight();
+            float camWidth = grayFinal.getWidth();
+            float camHeight = grayFinal.getHeight();
             
             ofPushMatrix();
             ofTranslate(640, 0);
@@ -283,7 +283,7 @@ public:
     ofxCvGrayscaleImage grayImage;
     ofxCvGrayscaleImage grayImageFixed;
     ofxCvGrayscaleImage grayBg;
-    ofxCvGrayscaleImage grayDiff;
+    ofxCvGrayscaleImage grayFinal;
     ofxCv::ContourFinder contourFinder;
     
     // send
@@ -300,11 +300,23 @@ public:
     ofParameter<string> NDI_name{"Name", "sender1"};
     ofParameter<bool> showNDI{"Show Stream",true};
     ofParameter<bool> ndiOut{"NDI OUT", true};
-    ofParameter<bool> bgTeachnique{"BG Teachnique", true};
-    ofParameter<int>  bgThreshold{"BG Threshold", 80, 10, 300};
-    ofParameter<int> frameCounterBGSet{"Frame Counter BG Set", 300, 0, 1000};
-    ofParameter<bool> audienceFlip{"Audience Flip", true};
-
+    
+    ofParameter<bool> bUseFD{"Use FD", false};
+    ofParameter<int>  fdThreshold{"FD Threshold", 80, 10, 300};
+    ofParameter<int> fdUpdateFrame{"FD fdUpdateFrame", 300, 0, 1000};
+    ofParameterGroup fdGrp{"Frame Difference", bUseFD, fdThreshold, fdUpdateFrame};
+    
+    // CV::Background
+    ofxCv::RunningBackground background;
+    ofParameter<bool> bUseBS{"Background Subtraction", true};
+    ofParameter<int> bgMode{"Mode", 0, 0, 2}; // ABSDIFF, BRIGHTER, DARKER
+    ofParameter<bool> bgResetBackground{"Reset Background", false};
+    ofParameter<bool> bgIgnoreForeGround{"Ignore ForeGround", false};
+    ofParameter<float> bgLearningTime{"Learning Time", 30, 0 ,30};
+    ofParameter<float> bgLearningRate{"Learning Rate", 0.0001, 0, 1.0};
+    ofParameter<float> bgThreshold{"Threshold", 10, 0, 255};
+    ofParameterGroup bsGrp{"Background Subtraction", bgMode, bgResetBackground, bgIgnoreForeGround, bgLearningTime, bgLearningRate, bgThreshold};
+    
     // CV::Contor, CV::Tracker
     ofParameter<bool> bAutoThreshold{ "Auto Threshold", false };
     ofParameter<float> threshold{ "threshold", 128, 0, 255 };
@@ -320,7 +332,7 @@ public:
     ofParameterGroup trackerGrp{ "Tracker", minAreaRadius, maxAreaRadius, bAutoThreshold, threshold, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, minAge, maxBlobNum };
     
     ofParameter<string> oscAddress{"oscAddress", "NDITracker"};
-    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut,bgTeachnique, bgThreshold, frameCounterBGSet, audienceFlip, trackerGrp, oscAddress};
+    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, fdGrp, bsGrp, trackerGrp, oscAddress};
     
     ofEventListeners listenerHolder;
 };
