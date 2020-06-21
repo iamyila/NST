@@ -55,8 +55,22 @@ public:
         listenerHolder.push(bUseFD.newListener([&](bool & b){
             if(bUseFD){
                 grayBg = grayImage;
+                grayFinal.clear();
+                bUseBS = false;
             }else{
                 grayBg.clear();
+                grayFinal.clear();
+            }
+        }));
+        
+        listenerHolder.push(bUseBS.newListener([&](bool & b){
+            if(bUseBS){
+                grayBg.clear();
+                grayFinal.clear();
+                bUseFD = false;
+            }else{
+                grayBg.clear();
+                grayFinal.clear();
             }
         }));
     }
@@ -80,7 +94,7 @@ public:
 
                     if(bUseFD){
                         grayFinal.absDiff(grayBg, grayImage);
-                        grayFinal.threshold(bgThreshold);
+                        grayFinal.threshold(fdThreshold);
 
                         if (bLearnBakground) {
                             grayBg = grayImage;
@@ -89,6 +103,24 @@ public:
                         if (frameCounter >= fdUpdateFrame) {
                             grayBg = grayImage;
                             frameCounter =0;
+                        }
+                    }else if(bUseBS){
+                        if(bsResetBackground) {
+                            background.reset();
+                            bsResetBackground = false;
+                        }
+                        
+                        if(pixels.isAllocated()){
+                            ofxCv::RunningBackground::DifferenceMode mode = (ofxCv::RunningBackground::DifferenceMode) bsMode.get();
+                            background.setDifferenceMode(mode);
+                            background.setLearningTime(bsLearningTime);
+                            background.setLearningRate(bsLearningRate);
+                            background.setIgnoreForeground(bsIgnoreForeground);
+                            background.setThresholdValue(bsThreshold);
+                            
+                            background.update(pixels, bsImage);
+                            bsImage.update();
+                            grayFinal.setFromPixels(bsImage.getPixels());
                         }
                     }else{
                         grayBg.clear();
@@ -123,6 +155,14 @@ public:
             grayImage.draw(0,0,320,240);
             if(bUseFD){
                 grayBg.draw(320,0,320,240);
+                grayFinal.draw(640,0,320,240);
+            }else if(bUseBS){
+                cv::Mat & bg = background.getBackground();
+                ofxCv::drawMat(bg, 320, 0, 320, 240);
+
+                //cv::Mat & fg = background.getForeground();
+                //ofxCv::drawMat(fg, 640, 0, 320, 240);
+                
                 grayFinal.draw(640,0,320,240);
             }else{
                 ofNoFill();
@@ -308,14 +348,15 @@ public:
     
     // CV::Background
     ofxCv::RunningBackground background;
+    ofImage bsImage;
     ofParameter<bool> bUseBS{"Background Subtraction", true};
-    ofParameter<int> bgMode{"Mode", 0, 0, 2}; // ABSDIFF, BRIGHTER, DARKER
-    ofParameter<bool> bgResetBackground{"Reset Background", false};
-    ofParameter<bool> bgIgnoreForeGround{"Ignore ForeGround", false};
-    ofParameter<float> bgLearningTime{"Learning Time", 30, 0 ,30};
-    ofParameter<float> bgLearningRate{"Learning Rate", 0.0001, 0, 1.0};
-    ofParameter<float> bgThreshold{"Threshold", 10, 0, 255};
-    ofParameterGroup bsGrp{"Background Subtraction", bgMode, bgResetBackground, bgIgnoreForeGround, bgLearningTime, bgLearningRate, bgThreshold};
+    ofParameter<int> bsMode{"Mode", 0, 0, 2}; // ABSDIFF, BRIGHTER, DARKER
+    ofParameter<bool> bsResetBackground{"Reset Background", false};
+    ofParameter<bool> bsIgnoreForeground{"Ignore ForeGround", false};
+    ofParameter<float> bsLearningTime{"Learning Time", 30, 0 ,30};
+    ofParameter<float> bsLearningRate{"Learning Rate", 0.0001, 0, 1.0};
+    ofParameter<float> bsThreshold{"Threshold", 10, 0, 255};
+    ofParameterGroup bsGrp{"Background Subtraction", bUseBS, bsMode, bsResetBackground, bsIgnoreForeground, bsLearningTime, bsLearningRate, bsThreshold};
     
     // CV::Contor, CV::Tracker
     ofParameter<bool> bAutoThreshold{ "Auto Threshold", false };
