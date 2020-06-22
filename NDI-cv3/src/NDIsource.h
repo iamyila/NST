@@ -9,7 +9,6 @@
 #include "ofxNDIReceiver.h"
 #include "ofxNDIRecvStream.h"
 #include "ofxOpenCv.h"
-#include "ofxCv.h"
 #include "ofxOsc.h"
 #include "ofxGui.h"
 #include "ofxNDISender.h"
@@ -56,23 +55,13 @@ public:
             if(bUseFD){
                 grayBg = grayImage;
                 grayFinal.clear();
-                bUseBS = false;
             }else{
                 grayBg.clear();
                 grayFinal.clear();
             }
         }));
         
-        listenerHolder.push(bUseBS.newListener([&](bool & b){
-            if(bUseBS){
-                grayBg.clear();
-                grayFinal.clear();
-                bUseFD = false;
-            }else{
-                grayBg.clear();
-                grayFinal.clear();
-            }
-        }));
+        prevCenter.assign(100, glm::vec2(0));
     }
     
     void update(){
@@ -81,6 +70,8 @@ public:
                 video.update();
         
                 if(video.isFrameNew()) {
+                    frameCounter++;
+
                     auto & frame = video.getFrame();
                     int xres = frame.xres;
                     int yres = frame.yres;
@@ -91,59 +82,83 @@ public:
                         grayImageFixed.setFromPixels(pixels);
                         grayImage.scaleIntoMe(grayImageFixed);
                     }
-
-                    if(bUseFD){
-                        grayFinal.absDiff(grayBg, grayImage);
-                        grayFinal.threshold(fdThreshold);
-
-                        if (bLearnBakground) {
-                            grayBg = grayImage;
-                            bLearnBakground = false;
-                        }
-                        if (frameCounter >= fdUpdateFrame) {
-                            grayBg = grayImage;
-                            frameCounter =0;
-                        }
-                    }else if(bUseBS){
-                        if(bsResetBackground) {
-                            background.reset();
-                            bsResetBackground = false;
-                        }
-                        
-                        if(pixels.isAllocated()){
-                            ofxCv::RunningBackground::DifferenceMode mode = (ofxCv::RunningBackground::DifferenceMode) bsMode.get();
-                            background.setDifferenceMode(mode);
-                            background.setLearningTime(bsLearningTime);
-                            background.setLearningRate(bsLearningRate);
-                            background.setIgnoreForeground(bsIgnoreForeground);
-                            background.setThresholdValue(bsThreshold);
-                            
-                            background.update(pixels, bsImage);
-                            bsImage.update();
-                            grayFinal.setFromPixels(bsImage.getPixels());
-                        }
-                    }else{
-                        grayBg.clear();
-                        grayFinal = grayImage;
-                    }
-                    
-                    frameCounter++;
+                }
+            
+                // diff
+                if(bUseFD){
+                    grayFinal.absDiff(grayBg, grayImage);
+                    grayFinal.threshold(fdThreshold);
                 }
             }
+        }
+        
+        
+        if(bUseFD){
+            if (bLearnBakground) {
+                grayBg = grayImage;
+                bLearnBakground = false;
+            }
+            if (frameCounter >= fdUpdateFrame) {
+                grayBg = grayImage;
+                frameCounter = 0;
+            }
+        }else{
+            grayBg.clear();
+            grayFinal = grayImage;
         }
     }
 
     void findContour(){
-        if(showNDI){
+        if(1){
             // contour finder
-            contourFinder.setMinAreaRadius(minAreaRadius);
-            contourFinder.setMaxAreaRadius(maxAreaRadius);
-            contourFinder.setThreshold(threshold);
-            contourFinder.setFindHoles(bFindHoles);
-            contourFinder.setSimplify(bSimplify);
-            contourFinder.setAutoThreshold(bAutoThreshold);
-            contourFinder.findContours(grayFinal);
+            contourFinder.findContours(grayFinal, minArea, maxArea, maxBlobNum, bFindHoles, bSimplify);
         }
+    }
+    
+    void processBlob(int i){
+        
+        float camWidth = grayFinal.getWidth();
+        float camHeight = grayFinal.getHeight();
+
+        ofxCvBlob & b = contourFinder.blobs[i];
+        ofRectangle & rect = b.boundingRect;
+        glm::vec2 center(rect.x+rect.width/2, rect.y+rect.height/2);
+        
+        // This velocity is not really accurate since we can not distinguish each blobs
+        glm::vec2 velocity = center - prevCenter[i];
+        float area = b.area / (camWidth*camHeight);
+            
+        ofSetLineWidth(1);
+        ofNoFill();
+        
+        ofPushMatrix();
+        ofScale(320/camWidth, 240/camHeight);
+        
+        ofSetColor(0, 255, 255);
+        
+        // Poly
+        b.draw();
+            
+        ofTranslate(center);
+        
+        // text
+        //string msg = ofToString(label) + ":" + ofToString(age);
+        //ofDrawBitmapString(msg, 0, 0);
+            
+        // velocity line
+        ofDrawLine(0, 0, velocity.x/3, velocity.y/3);
+        ofPopMatrix();
+            
+        // OSC
+        ofxOscMessage m;
+        m.setAddress(oscAddress.get() + "/val");
+        m.addFloatArg(center.x/camWidth);
+        m.addFloatArg(center.y/camHeight);
+        m.addFloatArg(glm::length(velocity));
+        m.addFloatArg(area);
+        oscSender.sendMessage(m);
+    
+        prevCenter[i] = center;
     }
     
     void draw(){
@@ -156,14 +171,6 @@ public:
             if(bUseFD){
                 grayBg.draw(320,0,320,240);
                 grayFinal.draw(640,0,320,240);
-            }else if(bUseBS){
-                cv::Mat & bg = background.getBackground();
-                ofxCv::drawMat(bg, 320, 0, 320, 240);
-
-                //cv::Mat & fg = background.getForeground();
-                //ofxCv::drawMat(fg, 640, 0, 320, 240);
-                
-                grayFinal.draw(640,0,320,240);
             }else{
                 ofNoFill();
                 ofSetColor(255);
@@ -173,130 +180,46 @@ public:
                 grayImage.draw(640, 0, 320, 240);
             }
             
-            // contour
-            ofxCv::RectTracker& tracker = contourFinder.getTracker();
-
-            if(1){
+            if(0){
                 // send /on, /off osc message
-                ofxOscBundle bundle;
-                const vector<unsigned int>& newLabels = tracker.getNewLabels();
-                const vector<unsigned int>& deadLabels = tracker.getDeadLabels();
-                for(int i = 0; i < newLabels.size(); i++) {
-                    int label = newLabels[i];
-                    ofxOscMessage m;
-                    m.setAddress(oscAddress.get()+ "/" + ofToString(label%maxBlobNum+1) +"/on");
-                    m.addIntArg(label);
-                    bundle.addMessage(m);
-                }
-                for(int i = 0; i < deadLabels.size(); i++) {
-                    int label = deadLabels[i];
-                    ofxOscMessage m;
-                    m.setAddress(oscAddress.get() + "/"+ ofToString(label%maxBlobNum+1) +"/off");
-                    m.addIntArg(label);
-                    bundle.addMessage(m);
-                }
-                
-                if(bundle.getMessageCount()>0){
-                    oscSender.sendBundle(bundle);
-                }
+//                ofxOscBundle bundle;
+//                const vector<unsigned int>& newLabels = tracker.getNewLabels();
+//                const vector<unsigned int>& deadLabels = tracker.getDeadLabels();
+//                for(int i = 0; i < newLabels.size(); i++) {
+//                    int label = newLabels[i];
+//                    ofxOscMessage m;
+//                    m.setAddress(oscAddress.get()+ "/" + ofToString(label%maxBlobNum+1) +"/on");
+//                    m.addIntArg(label);
+//                    bundle.addMessage(m);
+//                }
+//                for(int i = 0; i < deadLabels.size(); i++) {
+//                    int label = deadLabels[i];
+//                    ofxOscMessage m;
+//                    m.setAddress(oscAddress.get() + "/"+ ofToString(label%maxBlobNum+1) +"/off");
+//                    m.addIntArg(label);
+//                    bundle.addMessage(m);
+//                }
+//                if(bundle.getMessageCount()>0){
+//                    oscSender.sendBundle(bundle);
+//                }
             }
-            
-            float camWidth = grayFinal.getWidth();
-            float camHeight = grayFinal.getHeight();
             
             ofPushMatrix();
-            ofTranslate(640, 0);
-            
-            ofxOscBundle bundle;
+            ofTranslate(960, 0);
 
-            std::vector<pair<int, int>> ages;
-            ages.reserve(contourFinder.size());
-            
-            for (int i=0; i<contourFinder.size(); i++){
-                int label = contourFinder.getLabel(i);
-                int age = tracker.getAge(label);
-                ages.emplace_back(make_pair(i, age));
+            // gray canvas for contour
+            ofFill();
+            ofSetHexColor(0x333333);
+            ofDrawRectangle(0, 0, 320, 240);
+            ofSetHexColor(0xffffff);
+
+            int n= contourFinder.blobs.size();
+            for(int i=0; i<n; i++){
+                processBlob(i);
             }
-            
-            std::sort(ages.begin(), ages.end(),
-                      [](pair<int,int> & a,
-                         pair<int,int> & b){
-                          return a.second > b.second;
-                      });
-
-            // debug
-            // for(auto & a: ages){ cout << std::get<1>(a) << ","; } cout << endl;
-            
-            int n = MIN(maxBlobNum.get(), ages.size());
-            for(int j=0; j<n; j++){
-                int i = ages[j].first;
-                int age = ages[j].second;
-                int label = contourFinder.getLabel(i);
-                glm::vec2 center = ofxCv::toOf(contourFinder.getCenter(i));
-                const ofRectangle & rect = ofxCv::toOf(contourFinder.getBoundingRect(i));
-                if(age > minAge){
-
-                    glm::vec2 velocity = ofxCv::toOf(contourFinder.getVelocity(i));
-                    float area = contourFinder.getContourArea(i) / (camWidth*camHeight);
-                    const vector<ofPolyline> & polys = contourFinder.getPolylines();
-                    
-                    ofSetLineWidth(1);
-                    ofNoFill();
-                    
-                    ofPushMatrix();
-                    ofScale(320/camWidth, 240/camHeight);
-
-                    ofColor c;
-                    c.setHsb(label*10%255, 255, 255);
-                    ofSetColor(c);
-
-                    // Polylines
-                    for(auto & p: polys){
-                        p.draw();
-                    }
-
-                    ofTranslate(center);
-                    
-                    // Bounding Box
-                    ofSetRectMode(OF_RECTMODE_CENTER);
-                    ofDrawRectangle(0, 0, rect.width, rect.height);
-                    ofSetRectMode(OF_RECTMODE_CORNER);
-                    
-                    // text
-                    string msg = ofToString(label) + ":" + ofToString(tracker.getAge(label));
-                    ofDrawBitmapString(msg, 0, 0);
-                    
-                    // velocity line
-                    ofDrawLine(0, 0, velocity.x*4, velocity.y*4);
-                    ofPopMatrix();
-                    
-                    // OSC
-                    ofxOscMessage m;
-                    m.setAddress(oscAddress.get() + "/" + ofToString(label%maxBlobNum+1) +"/val");
-                    m.addIntArg(label);
-                    m.addFloatArg(center.x/camWidth);
-                    m.addFloatArg(center.y/camHeight);
-                    m.addFloatArg(glm::length(velocity));
-                    m.addFloatArg(area);
-                    m.addIntArg(age);
-                    bundle.addMessage(m);
-                
-                }else {
-                    ofPushMatrix();
-                    ofScale(320/camWidth, 240/camHeight);
-                    ofTranslate(center);
-                    ofSetColor(255, 50);
-                    ofSetRectMode(OF_RECTMODE_CENTER);
-                    ofDrawRectangle(0, 0, rect.width, rect.height);
-                    ofSetRectMode(OF_RECTMODE_CORNER);
-                    ofPopMatrix();
-                }
-            }
+         
             ofPopMatrix();
-    
-            if(bundle.getMessageCount()>0){
-                oscSender.sendBundle(bundle);
-            }
+
         }
         
         // name of NDI
@@ -324,7 +247,7 @@ public:
     ofxCvGrayscaleImage grayImageFixed;
     ofxCvGrayscaleImage grayBg;
     ofxCvGrayscaleImage grayFinal;
-    ofxCv::ContourFinder contourFinder;
+    ofxCvContourFinder contourFinder;
     
     // send
     ofxNDISender sender;
@@ -334,6 +257,7 @@ public:
     
     bool bLearnBakground;
     int frameCounter = 0;
+    vector<glm::vec2> prevCenter;
     
     ofxOscSender oscSender;
     
@@ -344,36 +268,15 @@ public:
     ofParameter<bool> bUseFD{"Use FD", false};
     ofParameter<int>  fdThreshold{"FD Threshold", 80, 10, 300};
     ofParameter<int> fdUpdateFrame{"FD fdUpdateFrame", 300, 0, 1000};
-    ofParameterGroup fdGrp{"Frame Difference", bUseFD, fdThreshold, fdUpdateFrame};
-    
-    // CV::Background
-    ofxCv::RunningBackground background;
-    ofImage bsImage;
-    ofParameter<bool> bUseBS{"Background Subtraction", true};
-    ofParameter<int> bsMode{"Mode", 0, 0, 2}; // ABSDIFF, BRIGHTER, DARKER
-    ofParameter<bool> bsResetBackground{"Reset Background", false};
-    ofParameter<bool> bsIgnoreForeground{"Ignore ForeGround", false};
-    ofParameter<float> bsLearningTime{"Learning Time", 30, 0 ,30};
-    ofParameter<float> bsLearningRate{"Learning Rate", 0.0001, 0, 1.0};
-    ofParameter<float> bsThreshold{"Threshold", 10, 0, 255};
-    ofParameterGroup bsGrp{"Background Subtraction", bUseBS, bsMode, bsResetBackground, bsIgnoreForeground, bsLearningTime, bsLearningRate, bsThreshold};
-    
-    // CV::Contor, CV::Tracker
-    ofParameter<bool> bAutoThreshold{ "Auto Threshold", false };
-    ofParameter<float> threshold{ "threshold", 128, 0, 255 };
-    ofParameter<float> minAreaRadius{ "minAreaRadius", 5, 0, 100 };
-    ofParameter<float> maxAreaRadius{ "maxAreaRadius", 10, 0, 100 };
+    ofParameter<float> minArea{ "minArea", 20, 0, 10000 };
+    ofParameter<float> maxArea{ "maxArea", 10000, 0, 300000 };
     ofParameter<bool> bFindHoles{ "find holes", false };
     ofParameter<bool> bSimplify{ "simplify", false };
-    ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
-    ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 300 };
-    ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
-    ofParameter<int> minAge{ "min age", 15, 0, 60 };
     ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 30 };
-    ofParameterGroup trackerGrp{ "Tracker", minAreaRadius, maxAreaRadius, bAutoThreshold, threshold, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, minAge, maxBlobNum };
+    ofParameterGroup fdGrp{"Frame Difference", bUseFD, fdThreshold, fdUpdateFrame, minArea, maxArea, bFindHoles, bSimplify, maxBlobNum };
     
     ofParameter<string> oscAddress{"oscAddress", "NDITracker"};
-    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, fdGrp, bsGrp, trackerGrp, oscAddress};
+    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, fdGrp, oscAddress};
     
     ofEventListeners listenerHolder;
 };
