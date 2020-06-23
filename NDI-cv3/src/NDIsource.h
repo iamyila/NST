@@ -56,23 +56,12 @@ public:
             if(bUseFD){
                 grayBg = grayImage;
                 grayFinal.clear();
-                bUseBS = false;
             }else{
                 grayBg.clear();
                 grayFinal.clear();
             }
         }));
-        
-        listenerHolder.push(bUseBS.newListener([&](bool & b){
-            if(bUseBS){
-                grayBg.clear();
-                grayFinal.clear();
-                bUseFD = false;
-            }else{
-                grayBg.clear();
-                grayFinal.clear();
-            }
-        }));
+
     }
     
     void update(){
@@ -104,24 +93,6 @@ public:
                             grayBg = grayImage;
                             frameCounter =0;
                         }
-                    }else if(bUseBS){
-                        if(bsResetBackground) {
-                            background.reset();
-                            bsResetBackground = false;
-                        }
-                        
-                        if(pixels.isAllocated()){
-                            ofxCv::RunningBackground::DifferenceMode mode = (ofxCv::RunningBackground::DifferenceMode) bsMode.get();
-                            background.setDifferenceMode(mode);
-                            background.setLearningTime(bsLearningTime);
-                            background.setLearningRate(bsLearningRate);
-                            background.setIgnoreForeground(bsIgnoreForeground);
-                            background.setThresholdValue(bsThreshold);
-                            
-                            background.update(pixels, bsImage);
-                            bsImage.update();
-                            grayFinal.setFromPixels(bsImage.getPixels());
-                        }
                     }else{
                         grayBg.clear();
                         grayFinal = grayImage;
@@ -136,13 +107,13 @@ public:
     void findContour(){
         if(showNDI){
             // contour finder
-            contourFinder.setMinAreaRadius(minAreaRadius);
-            contourFinder.setMaxAreaRadius(maxAreaRadius);
-            contourFinder.setThreshold(threshold);
-            contourFinder.setFindHoles(bFindHoles);
-            contourFinder.setSimplify(bSimplify);
-            contourFinder.setAutoThreshold(bAutoThreshold);
-            contourFinder.findContours(grayFinal);
+            contourFinder.findContours(grayFinal, minAreaRadius, maxAreaRadius, maxBlobNum, bFindHoles, bSimplify);
+            
+            rects.clear();
+            for(auto & b : contourFinder.blobs){
+                rects.push_back(ofxCv::toCv(b.boundingRect));
+            }
+            tracker.track(rects);
         }
     }
     
@@ -156,14 +127,6 @@ public:
             if(bUseFD){
                 grayBg.draw(320,0,320,240);
                 grayFinal.draw(640,0,320,240);
-            }else if(bUseBS){
-                cv::Mat & bg = background.getBackground();
-                ofxCv::drawMat(bg, 320, 0, 320, 240);
-
-                //cv::Mat & fg = background.getForeground();
-                //ofxCv::drawMat(fg, 640, 0, 320, 240);
-                
-                grayFinal.draw(640,0,320,240);
             }else{
                 ofNoFill();
                 ofSetColor(255);
@@ -173,10 +136,7 @@ public:
                 grayImage.draw(640, 0, 320, 240);
             }
             
-            // contour
-            ofxCv::RectTracker& tracker = contourFinder.getTracker();
-
-            if(1){
+           if(1){
                 // send /on, /off osc message
                 ofxOscBundle bundle;
                 const vector<unsigned int>& newLabels = tracker.getNewLabels();
@@ -209,11 +169,12 @@ public:
             
             ofxOscBundle bundle;
 
+            int nBlobs = contourFinder.blobs.size();
             std::vector<pair<int, int>> ages;
-            ages.reserve(contourFinder.size());
+            ages.reserve(nBlobs);
             
-            for (int i=0; i<contourFinder.size(); i++){
-                int label = contourFinder.getLabel(i);
+            for (int i=0; i<nBlobs; i++){
+                int label = tracker.getCurrentLabels()[i];
                 int age = tracker.getAge(label);
                 ages.emplace_back(make_pair(i, age));
             }
@@ -231,14 +192,15 @@ public:
             for(int j=0; j<n; j++){
                 int i = ages[j].first;
                 int age = ages[j].second;
-                int label = contourFinder.getLabel(i);
-                glm::vec2 center = ofxCv::toOf(contourFinder.getCenter(i));
-                const ofRectangle & rect = ofxCv::toOf(contourFinder.getBoundingRect(i));
+                int label = tracker.getCurrentLabels()[i];
+                ofxCvBlob & blob = contourFinder.blobs[i];
+                ofRectangle & rect = blob.boundingRect;
+                glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
+                
                 if(age > minAge){
 
-                    glm::vec2 velocity = ofxCv::toOf(contourFinder.getVelocity(i));
-                    float area = contourFinder.getContourArea(i) / (camWidth*camHeight);
-                    const vector<ofPolyline> & polys = contourFinder.getPolylines();
+                    glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
+                    float area = blob.area / (camWidth*camHeight);
                     
                     ofSetLineWidth(1);
                     ofNoFill();
@@ -251,9 +213,7 @@ public:
                     ofSetColor(c);
 
                     // Polylines
-                    for(auto & p: polys){
-                        p.draw();
-                    }
+                    blob.draw();
 
                     ofTranslate(center);
                     
@@ -324,7 +284,10 @@ public:
     ofxCvGrayscaleImage grayImageFixed;
     ofxCvGrayscaleImage grayBg;
     ofxCvGrayscaleImage grayFinal;
-    ofxCv::ContourFinder contourFinder;
+    ofxCvContourFinder contourFinder;
+    
+    ofxCv::RectTracker tracker;
+    vector<cv::Rect> rects;
     
     // send
     ofxNDISender sender;
@@ -346,18 +309,6 @@ public:
     ofParameter<int> fdUpdateFrame{"FD fdUpdateFrame", 300, 0, 1000};
     ofParameterGroup fdGrp{"Frame Difference", bUseFD, fdThreshold, fdUpdateFrame};
     
-    // CV::Background
-    ofxCv::RunningBackground background;
-    ofImage bsImage;
-    ofParameter<bool> bUseBS{"Background Subtraction", true};
-    ofParameter<int> bsMode{"Mode", 0, 0, 2}; // ABSDIFF, BRIGHTER, DARKER
-    ofParameter<bool> bsResetBackground{"Reset Background", false};
-    ofParameter<bool> bsIgnoreForeground{"Ignore ForeGround", false};
-    ofParameter<float> bsLearningTime{"Learning Time", 30, 0 ,30};
-    ofParameter<float> bsLearningRate{"Learning Rate", 0.0001, 0, 1.0};
-    ofParameter<float> bsThreshold{"Threshold", 10, 0, 255};
-    ofParameterGroup bsGrp{"Background Subtraction", bUseBS, bsMode, bsResetBackground, bsIgnoreForeground, bsLearningTime, bsLearningRate, bsThreshold};
-    
     // CV::Contor, CV::Tracker
     ofParameter<bool> bAutoThreshold{ "Auto Threshold", false };
     ofParameter<float> threshold{ "threshold", 128, 0, 255 };
@@ -373,7 +324,7 @@ public:
     ofParameterGroup trackerGrp{ "Tracker", minAreaRadius, maxAreaRadius, bAutoThreshold, threshold, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, minAge, maxBlobNum };
     
     ofParameter<string> oscAddress{"oscAddress", "NDITracker"};
-    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, fdGrp, bsGrp, trackerGrp, oscAddress};
+    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, fdGrp, trackerGrp, oscAddress};
     
     ofEventListeners listenerHolder;
 };
