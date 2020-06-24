@@ -33,22 +33,12 @@ public:
         grayFinal.allocate(w,h);
 
         // NDI sender
-        if(ndiOut){
-            std::string streamOutName =  prm.getName() + "-Out";
-            ofLogNotice() << "Setup NDI sender " << streamOutName;
-            if(sender.setup(streamOutName)) {
-                senderVideo.setup(sender);
-                senderVideo.setAsync(true);
-            }else{
-                ofLogError() << "Can not setup NDI sender";
-            }
-            
-            sender_Fbo.allocate(640, 360, GL_RGBA);
-            sender_Fbo.begin();
-            ofClear(255,255,255, 0);
-            sender_Fbo.end();
-        }
-        
+        setupNDI_OUT();
+        sender_Fbo.allocate(640, 360, GL_RGBA);
+        sender_Fbo.begin();
+        ofClear(255,255,255, 0);
+        sender_Fbo.end();
+
         // OSC Sender
         oscSender.setup(HOST, PORT);
         
@@ -61,7 +51,24 @@ public:
                 grayFinal.clear();
             }
         }));
+        
+        listenerHolder.push(ndiOut.newListener([&](bool & b){
+            if(ndiOut && !sender.isSetup()){
+                setupNDI_OUT();
+            }
+        }));
 
+    }
+    
+    void setupNDI_OUT(){
+        std::string streamOutName =  prm.getName() + "-Out";
+        ofLogNotice() << "Setup NDI sender " << streamOutName;
+        if(sender.setup(streamOutName)) {
+            senderVideo.setup(sender);
+            senderVideo.setAsync(true);
+        }else{
+            ofLogError() << "Can not setup NDI sender";
+        }
     }
     
     void update(){
