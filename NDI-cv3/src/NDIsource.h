@@ -61,13 +61,15 @@ public:
     }
     
     void setupNDI_OUT(){
-        std::string streamOutName =  prm.getName() + "-Out";
-        ofLogNotice() << "Setup NDI sender " << streamOutName;
-        if(sender.setup(streamOutName)) {
-            senderVideo.setup(sender);
-            senderVideo.setAsync(true);
-        }else{
-            ofLogError() << "Can not setup NDI sender";
+        if(ndiOut){
+            std::string streamOutName =  prm.getName() + "-Out";
+            ofLogNotice() << "Setup NDI sender " << streamOutName;
+            if(sender.setup(streamOutName)) {
+                senderVideo.setup(sender);
+                senderVideo.setAsync(true);
+            }else{
+                ofLogError() << "Can not setup NDI sender";
+            }
         }
     }
     
@@ -114,13 +116,15 @@ public:
     void findContour(){
         if(showNDI){
             // contour finder
-            contourFinder.findContours(grayFinal, minAreaRadius, maxAreaRadius, maxBlobNum, bFindHoles, bSimplify);
-            
-            rects.clear();
-            for(auto & b : contourFinder.blobs){
-                rects.push_back(ofxCv::toCv(b.boundingRect));
+            if(grayFinal.bAllocated){
+                contourFinder.findContours(grayFinal, minAreaRadius, maxAreaRadius, maxBlobNum, bFindHoles, bSimplify);
+                
+                rects.clear();
+                for(auto & b : contourFinder.blobs){
+                    rects.push_back(ofxCv::toCv(b.boundingRect));
+                }
+                tracker.track(rects);
             }
-            tracker.track(rects);
         }
     }
     
@@ -273,7 +277,7 @@ public:
     
     
     void sendNDI(){
-        if(ndiOut){
+        if(ndiOut && sender.isSetup()){
             sender_Fbo.begin();
             ofClear(0);
             contourFinder.draw();
