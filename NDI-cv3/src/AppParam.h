@@ -21,6 +21,7 @@ namespace mtb {
 
 		std::map<std::string, ofLogLevel> logLevelMap;
 
+        static const string version;
 		ofParameter<std::string> appVersion{ "App Version"};
 		ofParameter<std::string> windowTitle{ "Window Title", "" };
 		ofParameter<std::string> logLevel{ "Log Level", "OF_LOG_SILENT" };

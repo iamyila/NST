@@ -6,6 +6,9 @@
 #include "AppParam.h"
 
 namespace mtb{
+
+    const string AppParam::version = ofToString(__DATE__) + ", " + ofToString(__TIME__);
+    
     AppParam::AppParam(){
         targetFps.addListener(this, &AppParam::targetFpsChanged);
         windowTitle.addListener(this, &AppParam::windowTitleChanged);
@@ -14,7 +17,7 @@ namespace mtb{
         //bStart.setSerializable(false);
         fps.setSerializable(false);
         
-        appVersion = ofToString(__DATE__) + ", " + ofToString(__TIME__);
+        appVersion = version;
         
         //TODO: Maybe there is a better way of doing this?
         logLevelMap.insert(std::make_pair("OF_LOG_VERBOSE", OF_LOG_VERBOSE));
