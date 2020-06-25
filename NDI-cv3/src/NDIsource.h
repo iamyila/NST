@@ -43,8 +43,8 @@ public:
         // OSC Sender
         oscSender.setup(HOST, PORT);
         
-        listenerHolder.push(bUseFD.newListener([&](bool & b){
-            if(bUseFD){
+        listenerHolder.push(bUseBG.newListener([&](bool & b){
+            if(bUseBG){
                 grayBg = grayImage;
                 grayFinal.clear();
             }else{
@@ -91,23 +91,40 @@ public:
                         grayImage.scaleIntoMe(grayImageFixed);
                     }
 
-                    if(bUseFD){
+                    if(bUseBG){
 
                         grayDiff.absDiff(grayBg, grayImage);
-                        grayDiff.threshold(fdThreshold);
-                        grayFinal += grayDiff;
-
-                        //ofSaveImage(grayFinal);
                         
-                        if (bLearnBakground) {
-                            grayBg = grayImage;
-                            bLearnBakground = false;
-                            grayFinal = grayDiff;
+                        grayDiff.threshold(bgThreshold);
+                        
+                        switch(bgMode){
+                            case 0:
+                                // single frame difference
+                                grayFinal = grayDiff;
+                                break;
+                            case 1:
+                                // additive background
+                                grayFinal += grayDiff;
+                                break;
+                            case 2:
+                            {
+                                cv::Mat diffMat = ofxCv::toCv(grayDiff);
+                                cv::Mat finalMat = ofxCv::toCv(grayFinal);
+                                diffMat.convertTo(finalMat, CV_32F);
+                                cv::accumulateWeighted(diffMat, finalMat, acmWeight);
+                                break;
+                            }
+                            case 3:
+                                //cv::background
+                                break;
                         }
-                        if (frameCounter >= fdUpdateFrame) {
-                            grayBg = grayImage;
-                            frameCounter =0;
-                            grayFinal = grayDiff;
+                        
+                        if(bgMode >= 2){
+                            if (frameCounter >= bgUpdateFrame) {
+                                grayBg = grayImage;
+                                frameCounter =0;
+                                grayFinal = grayDiff;
+                            }
                         }
                     }else{
                         grayBg.clear();
@@ -125,7 +142,7 @@ public:
     void findContour(){
         // contour finder
         if(grayFinal.bAllocated){
-            contourFinder.findContours(grayFinal, minAreaRadius, maxAreaRadius, maxBlobNum, bFindHoles, bSimplify);
+            contourFinder.findContours(grayFinal, minArea, maxArea, maxBlobNum, bFindHoles, bSimplify);
             
             rects.clear();
             for(auto & b : contourFinder.blobs){
@@ -145,7 +162,7 @@ public:
         
             ofSetColor(255);
             grayImage.draw(0,0,320,240);
-            if(bUseFD){
+            if(bUseBG){
                 grayBg.draw(320,0,320,240);
                 grayFinal.draw(640,0,320,240);
             }else{
@@ -202,7 +219,7 @@ public:
                 ofRectangle & rect = blob.boundingRect;
                 glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
                 
-                if(age >= minAge){
+                if(1){
                     glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
                     float area = blob.area / (camWidth*camHeight);
                     
@@ -293,7 +310,6 @@ public:
     ofPixels senderPixels;
     ofFbo sender_Fbo; // with alpha
     
-    bool bLearnBakground;
     int frameCounter = 0;
     
     ofxOscSender oscSender;
@@ -302,27 +318,27 @@ public:
     ofParameter<bool> showNDI{"Show Stream",true};
     ofParameter<bool> ndiOut{"NDI OUT", true};
     
-    ofParameter<bool> bUseFD{"Use FD", false};
-    ofParameter<int>  fdThreshold{"FD Threshold", 80, 10, 300};
-    ofParameter<int> fdUpdateFrame{"FD fdUpdateFrame", 300, 0, 1000};
-    ofParameterGroup fdGrp{"Frame Difference", bUseFD, fdThreshold, fdUpdateFrame};
+    // Background
+    ofParameter<bool> bUseBG{"Use BG", false};
+    ofParameter<int>  bgThreshold{"Threshold", 80, 10, 300};
+    ofParameter<int> bgUpdateFrame{"Update Frame", 10, 0, 300};
+    ofParameter<int> bgMode{"Background Mode", 0, 0, 3}; // 0: instant diff, 1: add, 2: accumlate, 3: cv::background
+    ofParameter<float> acmWeight{"Accumulate Weight", 0.5, 0, 1.0};
+    ofParameterGroup bgGrp{"Background", bUseBG, bgThreshold, bgUpdateFrame, bgMode, acmWeight};
     
     // CV::Contor, CV::Tracker
-    ofParameter<bool> bAutoThreshold{ "Auto Threshold", false };
-    ofParameter<float> threshold{ "threshold", 128, 0, 255 };
-    ofParameter<float> minAreaRadius{ "minAreaRadius", 5, 0, 100 };
-    ofParameter<float> maxAreaRadius{ "maxAreaRadius", 10, 0, 100000 };
+    ofParameter<float> minArea{ "minArea", 5, 0, 100*100 };
+    ofParameter<float> maxArea{ "maxArea", 10, 0, 300*300 };
     ofParameter<bool> bFindHoles{ "find holes", false };
     ofParameter<bool> bSimplify{ "simplify", false };
     ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
     ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 300 };
     ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
-    ofParameter<int> minAge{ "min age", 15, 0, 60 };
     ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 30 };
-    ofParameterGroup trackerGrp{ "Tracker", minAreaRadius, maxAreaRadius, bAutoThreshold, threshold, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, minAge, maxBlobNum };
+    ofParameterGroup trackerGrp{ "Tracker", minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate,  maxBlobNum };
     
     ofParameter<string> oscAddress{"oscAddress", "NDITracker"};
-    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, fdGrp, trackerGrp, oscAddress};
+    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, bgGrp, trackerGrp, oscAddress};
     
     ofEventListeners listenerHolder;
 };
