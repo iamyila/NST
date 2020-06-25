@@ -107,18 +107,6 @@ void ofApp::keyPressed(int key){
             ofToggleFullscreen();
             break;
 
-        case ' ':
-            for (int i=0; i<ndis.size(); i++){
-                ndis[i]->bLearnBakground = true;
-            }
-            break;
-        case 's':
-            gui.saveToFile("settings.json");
-            break;
-            
-        case 'l':
-            gui.loadFromFile("settings.json");
-            break;
         case 'c':
             connectNDI();
             break;
