@@ -73,11 +73,7 @@ void ofApp::update(){
     
     for (int i=0; i<ndis.size(); i++){
         ndis[i]->update();
-    }
-    
-    for (int i=0; i<ndis.size(); i++){
-        ndis[i]->findContour();
-    }
+    }    
 }
 
 void ofApp::draw(){

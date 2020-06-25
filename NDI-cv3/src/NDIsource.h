@@ -31,6 +31,7 @@ public:
         grayImage.allocate(w,h);
         grayBg.allocate(w,h);
         grayFinal.allocate(w,h);
+        grayDiff.allocate(w,h);
 
         // NDI sender
         setupNDI_OUT();
@@ -91,16 +92,22 @@ public:
                     }
 
                     if(bUseFD){
-                        grayFinal.absDiff(grayBg, grayImage);
-                        grayFinal.threshold(fdThreshold);
 
+                        grayDiff.absDiff(grayBg, grayImage);
+                        grayDiff.threshold(fdThreshold);
+                        grayFinal += grayDiff;
+
+                        //ofSaveImage(grayFinal);
+                        
                         if (bLearnBakground) {
                             grayBg = grayImage;
                             bLearnBakground = false;
+                            grayFinal = grayDiff;
                         }
                         if (frameCounter >= fdUpdateFrame) {
                             grayBg = grayImage;
                             frameCounter =0;
+                            grayFinal = grayDiff;
                         }
                     }else{
                         grayBg.clear();
@@ -108,23 +115,26 @@ public:
                     }
                     
                     frameCounter++;
+                    
+                    findContour();
                 }
             }
         }
     }
 
     void findContour(){
-        if(showNDI){
-            // contour finder
-            if(grayFinal.bAllocated){
-                contourFinder.findContours(grayFinal, minAreaRadius, maxAreaRadius, maxBlobNum, bFindHoles, bSimplify);
-                
-                rects.clear();
-                for(auto & b : contourFinder.blobs){
-                    rects.push_back(ofxCv::toCv(b.boundingRect));
-                }
-                tracker.track(rects);
+        // contour finder
+        if(grayFinal.bAllocated){
+            contourFinder.findContours(grayFinal, minAreaRadius, maxAreaRadius, maxBlobNum, bFindHoles, bSimplify);
+            
+            rects.clear();
+            for(auto & b : contourFinder.blobs){
+                rects.push_back(ofxCv::toCv(b.boundingRect));
             }
+            tracker.setSmoothingRate(smoothingRate);
+            tracker.setMaximumDistance(maxDistance);
+            tracker.setPersistence(persistence);
+            tracker.track(rects);
         }
     }
     
@@ -176,40 +186,23 @@ public:
             float camHeight = grayFinal.getHeight();
             
             ofPushMatrix();
-            ofTranslate(640, 0);
+            ofTranslate(960, 0);
             
             ofxOscBundle bundle;
 
             int nBlobs = contourFinder.blobs.size();
-            std::vector<pair<int, int>> ages;
-            ages.reserve(nBlobs);
-            
-            for (int i=0; i<nBlobs; i++){
-                int label = tracker.getCurrentLabels()[i];
-                int age = tracker.getAge(label);
-                ages.emplace_back(make_pair(i, age));
-            }
-            
-            std::sort(ages.begin(), ages.end(),
-                      [](pair<int,int> & a,
-                         pair<int,int> & b){
-                          return a.second > b.second;
-                      });
 
-            // debug
-            // for(auto & a: ages){ cout << std::get<1>(a) << ","; } cout << endl;
-            
-            int n = MIN(maxBlobNum.get(), ages.size());
-            for(int j=0; j<n; j++){
-                int i = ages[j].first;
-                int age = ages[j].second;
+            ofLogNotice() << nBlobs;
+
+            int okBlobNum = 0;
+            for(int i=0; i<nBlobs; i++){
+                int age = tracker.getAge(i);
                 int label = tracker.getCurrentLabels()[i];
                 ofxCvBlob & blob = contourFinder.blobs[i];
                 ofRectangle & rect = blob.boundingRect;
                 glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
                 
-                if(age > minAge){
-
+                if(age >= minAge){
                     glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
                     float area = blob.area / (camWidth*camHeight);
                     
@@ -226,19 +219,9 @@ public:
                     // Polylines
                     blob.draw();
 
-                    ofTranslate(center);
-                    
-                    // Bounding Box
-                    ofSetRectMode(OF_RECTMODE_CENTER);
-                    ofDrawRectangle(0, 0, rect.width, rect.height);
-                    ofSetRectMode(OF_RECTMODE_CORNER);
-                    
                     // text
                     string msg = ofToString(label) + ":" + ofToString(tracker.getAge(label));
-                    ofDrawBitmapString(msg, 0, 0);
-                    
-                    // velocity line
-                    ofDrawLine(0, 0, velocity.x*4, velocity.y*4);
+                    ofDrawBitmapString(msg, 0, camHeight-i*25);
                     ofPopMatrix();
                     
                     // OSC
@@ -252,11 +235,14 @@ public:
                     m.addIntArg(age);
                     bundle.addMessage(m);
                 
+                    okBlobNum++;
+                    if(okBlobNum >= maxBlobNum) break;
+                    
                 }else {
                     ofPushMatrix();
                     ofScale(320/camWidth, 240/camHeight);
                     ofTranslate(center);
-                    ofSetColor(255, 50);
+                    ofSetColor(255);
                     ofSetRectMode(OF_RECTMODE_CENTER);
                     ofDrawRectangle(0, 0, rect.width, rect.height);
                     ofSetRectMode(OF_RECTMODE_CORNER);
@@ -294,6 +280,7 @@ public:
     ofxCvGrayscaleImage grayImage;
     ofxCvGrayscaleImage grayImageFixed;
     ofxCvGrayscaleImage grayBg;
+    ofxCvGrayscaleImage grayDiff;
     ofxCvGrayscaleImage grayFinal;
     ofxCvContourFinder contourFinder;
     
@@ -324,7 +311,7 @@ public:
     ofParameter<bool> bAutoThreshold{ "Auto Threshold", false };
     ofParameter<float> threshold{ "threshold", 128, 0, 255 };
     ofParameter<float> minAreaRadius{ "minAreaRadius", 5, 0, 100 };
-    ofParameter<float> maxAreaRadius{ "maxAreaRadius", 10, 0, 100 };
+    ofParameter<float> maxAreaRadius{ "maxAreaRadius", 10, 0, 100000 };
     ofParameter<bool> bFindHoles{ "find holes", false };
     ofParameter<bool> bSimplify{ "simplify", false };
     ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
