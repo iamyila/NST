@@ -164,8 +164,8 @@ public:
 
             int okBlobNum = 0;
             for(int i=0; i<nBlobs; i++){
-                int age = tracker.getAge(i);
                 int label = tracker.getCurrentLabels()[i];
+                int age = tracker.getAge(label);
                 ofxCvBlob & blob = contourFinder.blobs[i];
                 ofRectangle & rect = blob.boundingRect;
                 glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
