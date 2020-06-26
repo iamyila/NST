@@ -223,10 +223,10 @@ namespace ofxCv {
 		deadLabels.clear();
 		for(int j = 0; j < m; j++) {
 			if(!matchedPrevious[j]) {
-				if(previous[j].getLastSeen() < persistence) {
-					current.push_back(previous[j]);
-					current.back().timeStep(false);
-				}
+//                if(previous[j].getLastSeen() < persistence) {
+//                    current.push_back(previous[j]);
+//                    current.back().timeStep(false);
+//                }
 				deadLabels.push_back(previous[j].getLabel());
 			}
 		}
