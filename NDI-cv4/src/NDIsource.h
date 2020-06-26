@@ -170,7 +170,7 @@ public:
                 ofRectangle & rect = blob.boundingRect;
                 glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
                 
-                if(1){
+                if(minAge <= age){
                     glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
                     float area = blob.area / (camWidth*camHeight);
                     
@@ -282,7 +282,8 @@ public:
     ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 300 };
     ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
     ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 30 };
-    ofParameterGroup trackerGrp{ "Tracker", minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate,  maxBlobNum };
+    ofParameter<int> minAge{ "Min age", 10, 0, 60 };
+    ofParameterGroup trackerGrp{ "Tracker", minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, maxBlobNum, minAge };
     
     ofParameter<string> oscAddress{"oscAddress", "NDITracker"};
     ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, bgGrp, trackerGrp, oscAddress};
