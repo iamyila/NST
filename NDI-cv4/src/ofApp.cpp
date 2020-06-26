@@ -80,9 +80,10 @@ void ofApp::draw(){
     
     ofPushMatrix();
     ofTranslate(220, 30);
-    ofDrawBitmapStringHighlight("Current frame", +5, -5);
-    ofDrawBitmapStringHighlight("Foreground", 320+5, -5);
-    ofDrawBitmapStringHighlight("FBO", 640+5, -5);
+    ofSetColor(255);
+    ofDrawBitmapString("Current frame", +3, -5);
+    ofDrawBitmapString("Foreground", 320+13, -5);
+    ofDrawBitmapString("FBO", 640+23, -5);
     
     for (int i=0; i<ndis.size(); i++){
         ofPushMatrix();

@@ -70,6 +70,7 @@ public:
     }
     
     void update(){
+        
         if(showNDI){
             if(receiver.isConnected()){
                 video.update();
@@ -94,6 +95,9 @@ public:
                         finalImage.setFromPixels(pix);
                         
                         findContour();
+                        
+                        sendNoteOnOff();
+                        drawFbo();
                     }
                 }
             }
@@ -123,17 +127,37 @@ public:
         const vector<unsigned int>& deadLabels = tracker.getDeadLabels();
         for(int i = 0; i < newLabels.size(); i++) {
             int label = newLabels[i];
-            ofxOscMessage m;
-            m.setAddress(oscAddress.get()+ "/" + ofToString(label%maxBlobNum+1) +"/on");
-            m.addIntArg(label);
-            bundle.addMessage(m);
+            detectedBlobs.emplace(label, false);    // age = 1
+
+            ofLogVerbose() << "New blob : " << label;
         }
-        for(int i = 0; i < deadLabels.size(); i++) {
+        
+        for(int i = 0; i<deadLabels.size(); i++) {
             int label = deadLabels[i];
             ofxOscMessage m;
             m.setAddress(oscAddress.get() + "/"+ ofToString(label%maxBlobNum+1) +"/off");
             m.addIntArg(label);
             bundle.addMessage(m);
+            detectedBlobs.erase(label);
+            ofLogVerbose() << "Dead blob : " << label;
+        }
+
+        
+        // check detectedBlobs if it satisfies minAge to send NoteOn osc
+        std::map<int, bool>::iterator itr = detectedBlobs.begin();
+        for(; itr!=detectedBlobs.end(); itr++) {
+            bool noteOnSent = (*itr).second;
+            if(!noteOnSent){
+                int label = (*itr).first;
+                int age = tracker.getAge(label);
+                if(minAge <= age){
+                    ofxOscMessage m;
+                    m.setAddress(oscAddress.get()+ "/" + ofToString(label%maxBlobNum+1) +"/on");
+                    m.addIntArg(label);
+                    bundle.addMessage(m);
+                    (*itr).second = true;
+                }
+            }
         }
         
         if(bundle.getMessageCount()>0){
@@ -141,86 +165,122 @@ public:
         }
     }
     
-    void draw(){
-        if(!showNDI) return;
+    void drawFbo(){
         
-        if(receiver.isConnected()){
+        float camWidth = finalImage.getWidth();
+        float camHeight = finalImage.getHeight();
+        int nBlobs = contourFinder.blobs.size();
+        int okBlobNum = 0;
+        ofxOscBundle bundle;
         
-            sendNoteOnOff();
-            ofSetColor(255);
-            currentImage.draw(0,0,320,240);
-            ofxCv::drawMat(foregroundMat, 320,0,320,240);
-            sender_Fbo.draw(640, 0, 320, 240);
+        sender_Fbo.begin();
+        ofClear(0,0,0,0);
+        
+        for(int i=0; i<nBlobs; i++){
+            int label = tracker.getCurrentLabels()[i];
+            int age = tracker.getAge(label);
+            ofxCvBlob & blob = contourFinder.blobs[i];
+            ofRectangle & rect = blob.boundingRect;
+            glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
             
-            float camWidth = finalImage.getWidth();
-            float camHeight = finalImage.getHeight();
-            
-            ofPushMatrix();
-            ofTranslate(320, 0);
-            
-            ofxOscBundle bundle;
-
-            int nBlobs = contourFinder.blobs.size();
-
-            int okBlobNum = 0;
-            for(int i=0; i<nBlobs; i++){
-                int label = tracker.getCurrentLabels()[i];
-                int age = tracker.getAge(label);
-                ofxCvBlob & blob = contourFinder.blobs[i];
-                ofRectangle & rect = blob.boundingRect;
-                glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
+            if(minAge <= age){
                 
-                if(minAge <= age){
-                    glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
-                    float area = blob.area / (camWidth*camHeight);
-                    
-                    ofSetLineWidth(1);
-                    ofNoFill();
-                    
-                    ofPushMatrix();
-                    ofScale(320/camWidth, 240/camHeight);
-
+                glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
+                float area = blob.area / (camWidth*camHeight);
+                
+                ofSetLineWidth(1);
+                ofNoFill();
+                ofPushMatrix();
+                
+                // Polyline & rect
+                ofNoFill();
+                blob.draw();
+                
+                if(0){
+                    ofTranslate(center.x+20, center.y);
                     ofColor c;
                     c.setHsb(label*10%255, 255, 255);
                     ofSetColor(c);
-
-                    // Polylines
-                    blob.draw();
-
-                    // text
-                    string msg = ofToString(label) + ":" + ofToString(tracker.getAge(label));
-                    ofDrawBitmapString(msg, 0, camHeight-i*25);
-                    ofPopMatrix();
-                    
-                    // OSC
-                    ofxOscMessage m;
-                    m.setAddress(oscAddress.get() + "/" + ofToString(label%maxBlobNum+1) +"/val");
-                    m.addIntArg(label);
-                    m.addFloatArg(center.x/camWidth);
-                    m.addFloatArg(center.y/camHeight);
-                    m.addFloatArg(glm::length(velocity));
-                    m.addFloatArg(area);
-                    m.addIntArg(age);
-                    bundle.addMessage(m);
-                
-                    okBlobNum++;
-                    if(okBlobNum >= maxBlobNum) break;
-                    
-                }else {
-                    ofPushMatrix();
-                    ofScale(320/camWidth, 240/camHeight);
-                    ofTranslate(center);
-                    ofSetColor(255);
-                    ofSetRectMode(OF_RECTMODE_CENTER);
-                    ofDrawRectangle(0, 0, rect.width, rect.height);
-                    ofSetRectMode(OF_RECTMODE_CORNER);
-                    ofPopMatrix();
+                    string msg = ofToString(label) + ":" + ofToString(age);
+                    ofDrawBitmapString(msg, 0, 0);
                 }
+                
+                ofPopMatrix();
+                
+                // OSC
+                ofxOscMessage m;
+                m.setAddress(oscAddress.get() + "/" + ofToString(label%maxBlobNum+1) +"/val");
+                m.addIntArg(label);
+                m.addFloatArg(center.x/camWidth);
+                m.addFloatArg(center.y/camHeight);
+                m.addFloatArg(glm::length(velocity));
+                m.addFloatArg(area);
+                m.addIntArg(age);
+                bundle.addMessage(m);
+                
+                okBlobNum++;
+                if(okBlobNum >= maxBlobNum) break;
+            }else {
+                ofPushMatrix();
+                ofTranslate(center);
+                ofSetColor(255);
+                ofNoFill();
+                ofSetRectMode(OF_RECTMODE_CENTER);
+                ofDrawRectangle(0, 0, rect.width, rect.height);
+                ofSetRectMode(OF_RECTMODE_CORNER);
+                 if(0){
+                    string msg = ofToString(label) + ":" + ofToString(age);
+                    ofDrawBitmapString(msg, 0, 0);
+                 }
+                ofPopMatrix();
+            }
+        }
+        ofPopMatrix();
+        if(bundle.getMessageCount()>0){
+            oscSender.sendBundle(bundle);
+        }
+        
+        sender_Fbo.end();
+
+    }
+    
+    void draw(){
+        
+        if(!showNDI) return;
+        
+        if(receiver.isConnected()){
+            
+            int w = 320;
+            int h = 240;
+            
+            ofPushStyle();
+            ofSetColor(255);
+            currentImage.draw(0,0,w,h);
+            ofxCv::drawMat(foregroundMat, w+10,0,w,h);
+            ofEnableAlphaBlending();
+            sender_Fbo.draw(w+10, 0, w, h);
+            ofDisableAlphaBlending();
+            sender_Fbo.draw(w*2+20, 0, w, h);
+            
+            ofPushMatrix();
+            ofTranslate(w*3+30, 0);
+            ofSetColor(255);
+            ofDrawBitmapString("label   age", 0, -5);
+            char c[255];
+            
+            int i = 0;
+            map<int, bool>::iterator itr = detectedBlobs.begin();
+            for(; itr!=detectedBlobs.end(); itr++){
+                int label = (*itr).first;
+                bool bNoteOnSent = (*itr).second;
+                int age = tracker.getAge(label);
+                bNoteOnSent ? ofSetHexColor(0xff0099) : ofSetColor(220);
+                sprintf(c, "%5i %5i", label, age);
+                ofDrawBitmapString(c, 0, (i+1)*15);
+                i++;
             }
             ofPopMatrix();
-            if(bundle.getMessageCount()>0){
-                oscSender.sendBundle(bundle);
-            }
+            ofPopStyle();
         }
         
         // name of NDI
@@ -231,10 +291,6 @@ public:
     
     void sendNDI(){
         if(ndiOut && sender.isSetup()){
-            sender_Fbo.begin();
-            ofClear(0,0,0,0);
-            contourFinder.draw();
-            sender_Fbo.end();
             sender_Fbo.readToPixels(senderPixels);
             senderVideo.send(senderPixels);
         }
@@ -250,7 +306,8 @@ public:
     ofxCvContourFinder contourFinder;
     
     ofxCv::RectTracker tracker;
-    vector<cv::Rect> rects;
+    std::vector<cv::Rect> rects;
+    std::map<int, bool> detectedBlobs; // label, noteOnSent
     
     // send
     ofxNDISender sender;
