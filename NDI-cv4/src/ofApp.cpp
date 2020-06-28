@@ -9,6 +9,7 @@ void ofApp::setup(){
     gui.setup("settings", "settings.json");
     gui.add(appPrm.grp);
     gui.add(connectNDIBtn);
+    gui.add(soloMode);
     listenerHolder.push(connectNDIBtn.newListener([&](void){ connectNDI();}));
     
     for(int i=0; i<10; i++){
@@ -78,33 +79,49 @@ void ofApp::update(){
 
 void ofApp::draw(){
     
-    ofPushMatrix();
-    ofTranslate(220, 30);
-    ofSetColor(255);
-    ofDrawBitmapString("Current frame", +3, -5);
-    ofDrawBitmapString("Foreground", 320+13, -5);
-    ofDrawBitmapString("FBO", 640+23, -5);
-    
-    for (int i=0; i<ndis.size(); i++){
+    if(soloMode == 0){
         ofPushMatrix();
-        ofTranslate(0,i*250);
-        ndis[i]->draw();
+        ofTranslate(220, 30);
+        ofSetColor(255);
+        ofDrawBitmapString("Current frame", +3, -5);
+        ofDrawBitmapString("Foreground", 320+13, -5);
+        ofDrawBitmapString("FBO", 640+23, -5);
+        
+        for (int i=0; i<ndis.size(); i++){
+            ofPushMatrix();
+            ofTranslate(0,i*250);
+            ndis[i]->draw();
+            ofPopMatrix();
+        }
         ofPopMatrix();
-    }
-    ofPopMatrix();
+    
+        if(!bHide){
+            ofDisableDepthTest();
+            gui.draw();
+        }
 
+    }else{
+        int ndiCh = soloMode-1;
+        if(0<=ndiCh && ndiCh<ndis.size()){
+            auto ndi = ndis[ndiCh];
+            ofPushMatrix();
+            ndi->drawSolo();
+            ofPopMatrix();
+        }
+    }
+    
     for (int i=0; i<ndis.size(); i++){
         ndis[i]->sendNDI();
-    }
-    
-    if(!bHide){
-        ofDisableDepthTest();
-        gui.draw();
     }
 }
 
 void ofApp::keyPressed(int key){
 
+    if(48<=key && key< 58){
+        cout << key << endl;
+        soloMode = key-48;
+    }
+    
     switch (key){
             
         case 'h':

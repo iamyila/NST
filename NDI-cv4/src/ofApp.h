@@ -22,5 +22,6 @@ public:
     mtb::AppParam appPrm;
 
     ofParameter<void> connectNDIBtn{"Connect NDI"};
+    ofParameter<int> soloMode{"Solo", 0, 0, 10};
     ofEventListeners listenerHolder;
 };

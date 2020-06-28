@@ -209,7 +209,7 @@ public:
                 
                 // OSC
                 ofxOscMessage m;
-                m.setAddress(oscAddress.get() + "/" + ofToString(label%maxBlobNum+1) +"/val");
+                m.setAddress(oscAddress.get() + "/" + ofToString(getOscAddressSlot(label)) +"/val");
                 m.addIntArg(label);
                 m.addFloatArg(center.x/camWidth);
                 m.addFloatArg(center.y/camHeight);
@@ -223,7 +223,7 @@ public:
             }else {
                 ofPushMatrix();
                 ofTranslate(center);
-                ofSetColor(255);
+                ofSetColor(255, 180);
                 ofNoFill();
                 ofSetRectMode(OF_RECTMODE_CENTER);
                 ofDrawRectangle(0, 0, rect.width, rect.height);
@@ -242,6 +242,26 @@ public:
         
         sender_Fbo.end();
 
+    }
+    
+    int getOscAddressSlot(int label){
+        return label % maxBlobNum + 1;
+    }
+    
+    void drawSolo(){
+        if(!showNDI) return;
+        
+        if(receiver.isConnected()){
+            int w = sender_Fbo.getWidth();
+            int h = sender_Fbo.getHeight();
+            ofRectangle v = ofRectangle(0,0,w,h);
+            v.scaleTo(ofGetCurrentViewport());
+            ofDisableAlphaBlending();
+            ofSetColor(255);
+            ofSetRectMode(OF_RECTMODE_CENTER);
+            sender_Fbo.draw(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
+            ofSetRectMode(OF_RECTMODE_CORNER);
+        }
     }
     
     void draw(){
@@ -265,7 +285,7 @@ public:
             ofPushMatrix();
             ofTranslate(w*3+30, 0);
             ofSetColor(255);
-            ofDrawBitmapString("label   age", 0, -5);
+            ofDrawBitmapString("label   age   OscAdrsSlot", 0, -5);
             char c[255];
             
             int i = 0;
@@ -275,7 +295,7 @@ public:
                 bool bNoteOnSent = (*itr).second;
                 int age = tracker.getAge(label);
                 bNoteOnSent ? ofSetHexColor(0xff0099) : ofSetColor(220);
-                sprintf(c, "%5i %5i", label, age);
+                sprintf(c, "%5i %5i  %2i", label, age, getOscAddressSlot(label));
                 ofDrawBitmapString(c, 0, (i+1)*15);
                 i++;
             }
@@ -338,7 +358,7 @@ public:
     ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
     ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 300 };
     ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
-    ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 30 };
+    ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
     ofParameter<int> minAge{ "Min age", 10, 0, 60 };
     ofParameterGroup trackerGrp{ "Tracker", minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, maxBlobNum, minAge };
     
