@@ -107,7 +107,7 @@ public:
     void findContour(){
         // contour finder
         if(finalImage.bAllocated){
-            contourFinder.findContours(finalImage, minArea, maxArea, maxBlobNum, bFindHoles, bSimplify);
+            contourFinder.findContours(finalImage, minArea*minArea, maxArea*maxArea, maxBlobNum, bFindHoles, bSimplify);
             
             rects.clear();
             for(auto & b : contourFinder.blobs){
@@ -351,8 +351,8 @@ public:
     ofParameterGroup bgGrp{"Background Subtractor", bgAlgo};
     
     // CV::Contor, CV::Tracker
-    ofParameter<float> minArea{ "minArea", 5, 0, 100*100 };
-    ofParameter<float> maxArea{ "maxArea", 10, 0, 300*300 };
+    ofParameter<float> minArea{ "minArea", 5, 0, 100 };
+    ofParameter<float> maxArea{ "maxArea", 10, 0, 300 };
     ofParameter<bool> bFindHoles{ "find holes", false };
     ofParameter<bool> bSimplify{ "simplify", false };
     ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
