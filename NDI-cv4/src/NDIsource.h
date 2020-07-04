@@ -171,7 +171,6 @@ public:
         float camHeight = finalImage.getHeight();
         int nBlobs = contourFinder.blobs.size();
         int okBlobNum = 0;
-        ofxOscBundle bundle;
         
         sender_Fbo.begin();
         ofClear(0,0,0,0);
@@ -216,7 +215,7 @@ public:
                 m.addFloatArg(glm::length(velocity));
                 m.addFloatArg(area);
                 m.addIntArg(age);
-                bundle.addMessage(m);
+                oscSender.sendMessage(m);
                 
                 okBlobNum++;
                 if(okBlobNum >= maxBlobNum) break;
@@ -236,9 +235,7 @@ public:
             }
         }
         ofPopMatrix();
-        if(bundle.getMessageCount()>0){
-            oscSender.sendBundle(bundle);
-        }
+
         
         sender_Fbo.end();
 
