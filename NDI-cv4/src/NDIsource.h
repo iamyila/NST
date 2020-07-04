@@ -152,7 +152,7 @@ public:
                 int age = tracker.getAge(label);
                 if(minAge <= age){
                     ofxOscMessage m;
-                    m.setAddress(oscAddress.get()+ "/" + ofToString(label%maxBlobNum+1) +"/on");
+                    m.setAddress(oscAddress.get()+ "/" + ofToString(getOscAddressSlot(label)) +"/on");
                     m.addIntArg(label);
                     bundle.addMessage(m);
                     (*itr).second = true;
