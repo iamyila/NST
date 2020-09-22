@@ -28,6 +28,12 @@ public:
     
     void setup(int w, int h){
         
+//        float sw = 300;
+//        float sh = 300;
+//        glm::vec2 r1 = toPolar(100, 0, sw, sh);
+//        glm::vec2 r2 = toPolar(150, 200, sw, sh);
+//        glm::vec2 r3 = toPolar(50, 100, sw, sh);
+                
         currentImage.allocate(w,h);
         currentImageFixed.allocate(w,h);
         finalImage.allocate(w,h);
@@ -217,19 +223,9 @@ public:
                 m.addIntArg(age);
                 
                 // polar coordinate
-                float tx = center.x/camWidth*2.0 - 1.0;
-                float ty = center.y/camHeight*2.0 - 1.0;
-                float angle = 0;
-                if(tx!=0 && ty!=0){
-                    angle = atan2(ty, tx);
-                    angle = ofRadToDeg(angle);
-                    angle += 90;
-                }
-                float len = sqrt(tx*tx + ty*ty);
-                len = ofMap(len, 0, 1.41421356, 0.01, 0.1, true);
-
-                m.addFloatArg(angle);
-                m.addFloatArg(len);
+                glm::vec2 p = toPolar(center.x, center.y, camWidth, camHeight);
+                m.addFloatArg(p.x);
+                m.addFloatArg(p.y);
 
                 oscSender.sendMessage(m);
                 
@@ -255,6 +251,20 @@ public:
         
         sender_Fbo.end();
 
+    }
+    
+    glm::vec2 toPolar(float x, float y, float w, float h){
+        float tx = x/w*2.0 - 1.0;
+        float ty = (h-y)/h*2.0 - 1.0;
+        
+        float angle = 0;
+        if(!(tx==0 && ty==0)){
+            angle = atan2(tx, ty);
+            angle = ofRadToDeg(angle);
+        }
+        float len = sqrt(tx*tx + ty*ty);
+        len = ofMap(len, 0, 1.41421356, 0.01, 0.2, true);
+        return glm::vec2(angle, len);
     }
     
     int getOscAddressSlot(int label){
