@@ -263,7 +263,7 @@ public:
             angle = ofRadToDeg(angle);
         }
         float len = sqrt(tx*tx + ty*ty);
-        len = ofMap(len, 0, 1.41421356, 0.01, 0.2, true);
+        len = ofMap(len, 0, 1.41421356, 0.01, 2.0, true);
         return glm::vec2(angle, len);
     }
     
