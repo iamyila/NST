@@ -210,11 +210,27 @@ public:
                 ofxOscMessage m;
                 m.setAddress(oscAddress.get() + "/" + ofToString(getOscAddressSlot(label)) +"/val");
                 m.addIntArg(label);
-                m.addFloatArg(center.x/camWidth);
-                m.addFloatArg(center.y/camHeight);
+                m.addFloatArg(center.x/camWidth * 100);
+                m.addFloatArg(center.y/camHeight * 100);
                 m.addFloatArg(glm::length(velocity));
                 m.addFloatArg(area);
                 m.addIntArg(age);
+                
+                // polar coordinate
+                float tx = center.x/camWidth*2.0 - 1.0;
+                float ty = center.y/camHeight*2.0 - 1.0;
+                float angle = 0;
+                if(tx!=0 && ty!=0){
+                    angle = atan2(ty, tx);
+                    angle = ofRadToDeg(angle);
+                    angle += 90;
+                }
+                float len = sqrt(tx*tx + ty*ty);
+                len = ofMap(len, 0, 1.41421356, 0.01, 0.1, true);
+
+                m.addFloatArg(angle);
+                m.addFloatArg(len);
+
                 oscSender.sendMessage(m);
                 
                 okBlobNum++;
