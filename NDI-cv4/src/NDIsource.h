@@ -216,8 +216,8 @@ public:
                 ofxOscMessage m;
                 m.setAddress(oscAddress.get() + "/" + ofToString(getOscAddressSlot(label)) +"/val");
                 m.addIntArg(label);
-                m.addFloatArg(center.x/camWidth * 100);
-                m.addFloatArg(center.y/camHeight * 100);
+                m.addFloatArg(center.x/camWidth * 200 - 100);
+                m.addFloatArg(center.y/camHeight * 200 - 100);
                 m.addFloatArg(glm::length(velocity));
                 m.addFloatArg(area);
                 m.addIntArg(age);
