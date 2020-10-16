@@ -83,13 +83,10 @@ void ofApp::draw(){
         ofPushMatrix();
         ofTranslate(220, 30);
         ofSetColor(255);
-        ofDrawBitmapString("Current frame", +3, -5);
-        ofDrawBitmapString("Foreground", 320+13, -5);
-        ofDrawBitmapString("FBO", 640+23, -5);
         
         for (int i=0; i<ndis.size(); i++){
             ofPushMatrix();
-            ofTranslate(i*250, 0);
+            ofTranslate(i*360, 0);
             ndis[i]->draw();
             ofPopMatrix();
         }
