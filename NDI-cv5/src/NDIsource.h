@@ -315,8 +315,8 @@ public:
         
         if(receiver.isConnected()){
             
-            int w = inputWidth;
-            int h = inputHeight;
+            int w = inputWidth/2;
+            int h = inputHeight/2;
             
             ofPushStyle();
             ofEnableAlphaBlending();
