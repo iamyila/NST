@@ -74,7 +74,9 @@ void ofApp::update(){
     
     for (int i=0; i<ndis.size(); i++){
         ndis[i]->update();
-    }    
+    }
+    
+    ofSetWindowTitle(ofToString((int)ofGetFrameRate()));
 }
 
 void ofApp::draw(){

@@ -1,3 +1,5 @@
+ofxEasyFboGlitch
+ofxFastFboReader
 ofxGui
 ofxNDI
 ofxOpenCv

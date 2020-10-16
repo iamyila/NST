@@ -37,6 +37,7 @@ public:
     void begin(){
         fbo.begin();
         ofClear(0,0,0,0);
+         ofSetColor(255);
     }
     
     void end(){
@@ -53,6 +54,11 @@ public:
             senderVideo.send(pixels);
         }
     }
+    
+//    void sendExternalFbo(const ofFbo & fbo){
+//        fbo.readToPixels(pixels);
+//        senderVideo.send(pixels);
+//    }
     
 private:
     ofxNDISender sender;    

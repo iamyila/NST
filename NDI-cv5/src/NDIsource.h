@@ -16,6 +16,7 @@
 #include "ofxNDISendStream.h"
 #include "ofxHeatMap.h"
 #include "NDISender.h"  // my own helper class
+#include "ofxEasyFboGlitch.h"
 
 using std::string;
 
@@ -53,16 +54,28 @@ public:
         
         setupBS();
         
+        // Effects
         heatmap.setup(w, h, 32);
+        
+        glitch.allocate(w, h);
+        glitch.setGlichResetProbability(0.5);
+        
+        combinedFbo.allocate(w, h, GL_RGBA);
+        combinedFbo.begin();
+        ofClear(255,255,255, 0);
+        combinedFbo.end();
+
     }
     
     void setupNDI_OUT(){
         if(ndiOut){
             std::string nameBlob =  prm.getName() + "-Blob";
             std::string nameHeat =  prm.getName() + "-Heatmap";
+            std::string nameGlitch =  prm.getName() + "-Glitch";
 
             senderBlob.setup(nameBlob, inputWidth, inputHeight);
             senderHeatmap.setup(nameHeat, inputWidth, inputHeight);
+            senderGlitch.setup(nameGlitch, inputWidth, inputHeight);
         }
     }
     
@@ -262,14 +275,31 @@ public:
         }
         ofPopMatrix();
 
-        ofPushStyle();
-        ofNoFill();
-        ofSetColor(0,0,255);
-        ofDrawRectangle(1,1,camWidth-2, camHeight-2);
-        ofPopStyle();
+//        for debug
+//        ofPushStyle();
+//        ofNoFill();
+//        ofSetColor(0,0,255);
+//        ofDrawRectangle(1,1,camWidth-2, camHeight-2);
+//        ofPopStyle();
         
         senderBlob.end();
 
+        ofPushStyle();
+        ofEnableAlphaBlending();
+        combinedFbo.begin();
+        ofClear(0,0,0,0);
+        ofSetColor(255);
+        currentImage.draw(0,0,camWidth,camHeight);
+        senderBlob.draw(0,0,camWidth, camHeight);
+        senderHeatmap.draw(0,0,camWidth, camHeight);
+        combinedFbo.end();
+        ofPopStyle();
+        
+        // Glitch
+        senderGlitch.begin();       
+        glitch.draw(combinedFbo, 0, 0, camWidth, camHeight);
+        senderGlitch.end();
+        
     }
     
     glm::vec2 toPolar(float x, float y, float w, float h){
@@ -313,21 +343,37 @@ public:
         
         if(receiver.isConnected()){
             
-            int w = inputWidth/2;
-            int h = inputHeight/2;
+            int w = inputWidth/2.5;
+            int h = inputHeight/2.5;
             
             ofPushStyle();
             ofEnableAlphaBlending();
             ofSetColor(255);
+            
+            // 1
             currentImage.draw(0,0,w,h);
-            ofxCv::drawMat(foregroundMat,0, h+10,w,h);
+
+            // 2
+            ofxCv::drawMat(foregroundMat,0, h+10,w,h);  //////??????
+
             ofEnableAlphaBlending();
             
-            senderBlob.draw(0, h+10, w, h);
-            senderHeatmap.draw(0, h*2+20, w, h);
+            // 3
+            senderBlob.draw(0, h*2+20, w, h);
             
+            // 4
+            senderHeatmap.draw(0, h*3+30, w, h);
+        
+            // 5
+            combinedFbo.draw(0, h*4+40, w, h);
+            
+            // 6
+            senderGlitch.draw(0, h*5+50, w, h);
+            
+            
+            // 7 info text
             ofPushMatrix();
-            ofTranslate(0, h*3+40);
+            ofTranslate(0, h*6+60+10);
             ofSetColor(255);
             ofDrawBitmapString("label   age   OscAdrsSlot", 0, -5);
             char c[255];
@@ -357,6 +403,7 @@ public:
         if(ndiOut){
             senderBlob.send();
             senderHeatmap.send();
+            senderGlitch.send();
         }
     }
     
@@ -376,16 +423,22 @@ public:
     std::vector<cv::Rect> rects;
     std::map<int, bool> detectedBlobs; // label, noteOnSent
     
-    // send
+    // NID send
     NDISender senderBlob;
     NDISender senderHeatmap;
+    NDISender senderGlitch;
         
     int frameCounter = 0;
     
     ofxOscSender oscSender;
     
+    //
+    ofFbo combinedFbo;
+    
     // Effects
     ofxHeatMap heatmap;
+    
+    ofxEasyFboGlitch glitch;
     
     ofParameter<string> NDI_name{"Name", "sender1"};
     ofParameter<bool> showNDI{"Show Stream",true};
