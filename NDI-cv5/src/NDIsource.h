@@ -43,11 +43,17 @@ public:
 
         // NDI sender
         setupNDI_OUT();
-        sender_Fbo.allocate(w, h, GL_RGBA);
-        sender_Fbo.begin();
+        sender_fbo_blob.allocate(w, h, GL_RGBA);
+        sender_fbo_blob.begin();
         ofClear(255,255,255, 0);
-        sender_Fbo.end();
+        sender_fbo_blob.end();
 
+        
+        sender_fbo_heatmap.allocate(w, h, GL_RGBA);
+        sender_fbo_heatmap.begin();
+        ofClear(255,255,255, 0);
+        sender_fbo_heatmap.end();
+        
         // OSC Sender
         oscSender.setup(HOST, PORT);
         
@@ -60,14 +66,25 @@ public:
     }
     
     void setupNDI_OUT(){
-        if(ndiOut && !sender.isSetup()){
-            std::string streamOutName =  prm.getName() + "-Out";
-            ofLogNotice() << "Setup NDI sender " << streamOutName;
-            if(sender.setup(streamOutName)) {
-                senderVideo.setup(sender);
-                senderVideo.setAsync(true);
+        if(ndiOut && !ndiSenderBlob.isSetup()){
+            std::string streamOutName =  prm.getName() + "-Blob";
+            ofLogNotice() << "Setup NDI sender for Blob" << streamOutName;
+            if(ndiSenderBlob.setup(streamOutName)) {
+                senderVideoBlob.setup(ndiSenderBlob);
+                senderVideoBlob.setAsync(true);
             }else{
-                ofLogError() << "Can not setup NDI sender";
+                ofLogError() << "Can not setup NDI sender Blob";
+            }
+        }
+        
+        if(ndiOut && !ndiSenderHeatmap.isSetup()){
+            std::string streamOutName =  prm.getName() + "-HeatMap";
+            ofLogNotice() << "Setup NDI sender for HeatMap " << streamOutName;
+            if(ndiSenderHeatmap.setup(streamOutName)) {
+                senderVideoHeatmap.setup(ndiSenderHeatmap);
+                senderVideoHeatmap.setAsync(true);
+            }else{
+                ofLogError() << "Can not setup NDI HeatMap";
             }
         }
     }
@@ -185,12 +202,17 @@ public:
         float camHeight = finalImage.getHeight();
         int nBlobs = contourFinder.blobs.size();
         int okBlobNum = 0;
-        
-        sender_Fbo.begin();
+
+        // FBO 1
+        sender_fbo_heatmap.begin();
         ofClear(0,0,0,0);
-        
-        ofSetColor(255, 255);
+        ofSetColor(255, 100);
         heatmap.draw(0, 0);
+        sender_fbo_heatmap.end();
+        
+        // FBO 2
+        sender_fbo_blob.begin();
+        ofClear(0,0,0,0);
         
         for(int i=0; i<nBlobs; i++){
             int label = tracker.getCurrentLabels()[i];
@@ -271,7 +293,7 @@ public:
         ofDrawRectangle(1,1,camWidth-2, camHeight-2);
         ofPopStyle();
         
-        sender_Fbo.end();
+        sender_fbo_blob.end();
 
     }
     
@@ -297,14 +319,14 @@ public:
         if(!showNDI) return;
         
         if(receiver.isConnected()){
-            int w = sender_Fbo.getWidth();
-            int h = sender_Fbo.getHeight();
+            int w = sender_fbo_blob.getWidth();
+            int h = sender_fbo_blob.getHeight();
             ofRectangle v = ofRectangle(0,0,w,h);
             v.scaleTo(ofGetCurrentViewport());
             ofDisableAlphaBlending();
             ofSetColor(255);
             ofSetRectMode(OF_RECTMODE_CENTER);
-            sender_Fbo.draw(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
+            sender_fbo_blob.draw(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
             ofSetRectMode(OF_RECTMODE_CORNER);
         }
     }
@@ -324,10 +346,9 @@ public:
             currentImage.draw(0,0,w,h);
             ofxCv::drawMat(foregroundMat,0, h+10,w,h);
             ofEnableAlphaBlending();
-            sender_Fbo.draw(0, h+10, w, h);
-            ofDisableAlphaBlending();
-            sender_Fbo.draw(0, h*2+20, w, h);
-        
+            
+            sender_fbo_blob.draw(0, h+10, w, h);
+            sender_fbo_heatmap.draw(0, h*2+20, w, h);
             
             ofPushMatrix();
             ofTranslate(0, h*3+40);
@@ -357,9 +378,14 @@ public:
     
     
     void sendNDI(){
-        if(ndiOut && sender.isSetup()){
-            sender_Fbo.readToPixels(senderPixels);
-            senderVideo.send(senderPixels);
+        if(ndiOut && ndiSenderBlob.isSetup()){
+            sender_fbo_blob.readToPixels(senderPixelsBlob);
+            senderVideoBlob.send(senderPixelsBlob);
+        }
+        
+        if(ndiOut && ndiSenderHeatmap.isSetup()){
+            sender_fbo_heatmap.readToPixels(senderPixelsHeatmap);
+            senderVideoHeatmap.send(senderPixelsHeatmap);
         }
     }
     
@@ -380,10 +406,15 @@ public:
     std::map<int, bool> detectedBlobs; // label, noteOnSent
     
     // send
-    ofxNDISender sender;
-    ofxNDISendVideo senderVideo;
-    ofPixels senderPixels;
-    ofFbo sender_Fbo; // with alpha
+    ofxNDISender ndiSenderBlob;
+    ofxNDISender ndiSenderHeatmap;
+    
+    ofxNDISendVideo senderVideoBlob;
+    ofxNDISendVideo senderVideoHeatmap;
+    ofPixels senderPixelsBlob;
+    ofPixels senderPixelsHeatmap;
+    ofFbo sender_fbo_blob; // with alpha
+    ofFbo sender_fbo_heatmap; // with alpha
     
     int frameCounter = 0;
     
