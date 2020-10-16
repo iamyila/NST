@@ -265,6 +265,11 @@ public:
         }
         ofPopMatrix();
 
+        ofPushStyle();
+        ofNoFill();
+        ofSetColor(0,0,255);
+        ofDrawRectangle(1,1,camWidth-2, camHeight-2);
+        ofPopStyle();
         
         sender_Fbo.end();
 
