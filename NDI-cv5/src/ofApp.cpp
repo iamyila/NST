@@ -141,12 +141,12 @@ void ofApp::draw(){
             gui.draw();
             
             ofPushMatrix();
-            ofTranslate(20, 180*5);
+            ofTranslate(20, 180*5 - 90);
             if(hasOscReceived-- > 0){
                 ofFill();
                 ofSetColor(200, 0, 100);
                 ofDrawCircle(0, 0, 5, 5);
-                ofDrawBitmapString("OSC received", 10, 10);
+                ofDrawBitmapString("OSC received", 10, 5);
             }
             ofPopMatrix();
         }
