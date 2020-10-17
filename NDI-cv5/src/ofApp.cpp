@@ -28,8 +28,8 @@ void ofApp::setup(){
     gui.loadFromFile("settings.json");
     gui.minimizeAll();
 
-    int camWidth = 640;
-    int camHeight = 360;
+    int camWidth = 640; //1280; //1920; //640;
+    int camHeight = 360; //720;1080; //360;
     for(int i=0; i<ndis.size(); i++){
         ndis[i]->setup(camWidth, camHeight);
     }
