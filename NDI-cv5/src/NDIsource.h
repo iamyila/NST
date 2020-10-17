@@ -20,9 +20,6 @@
 
 using std::string;
 
-// OSC send
-#define HOST "localhost"
-#define PORT 12345
 
 class NDIsource{
     
@@ -46,11 +43,12 @@ public:
         // NDI sender
         setupNDI_OUT();
         
-        // OSC Sender
-        oscSender.setup(HOST, PORT);
+        setupOscSender();
         
         listenerHolder.push(ndiOut.newListener([&](bool & b){ setupNDI_OUT(); }));
         listenerHolder.push(bgAlgo.newListener([&](int & algo){ setupBS(); }));
+        listenerHolder.push(oscIp.newListener([&](string & ip){ setupOscSender(); }));
+        listenerHolder.push(oscPort.newListener([&](int & port){ setupOscSender(); }));
         
         setupBS();
         
@@ -83,6 +81,10 @@ public:
         }else{
             pBackSub = cv::createBackgroundSubtractorKNN();
         }
+    }
+    
+    void setupOscSender(){
+        oscSender.setup(oscIp, oscPort);
     }
     
     void update(){
@@ -464,8 +466,13 @@ public:
     ofParameter<int> minAge{ "Min age", 10, 0, 60 };
     ofParameterGroup trackerGrp{ "Tracker", minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, maxBlobNum, minAge };
     
+    // OSC sender settings
+    ofParameter<string> oscIp{"IP", "localhost"};
+    ofParameter<int> oscPort{"port", 12345, 0, 12345};
     ofParameter<string> oscAddress{"oscAddress", "NDITracker"};
-    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, bgGrp, trackerGrp, oscAddress};
+    ofParameterGroup oscGrp{"OSC send", oscIp, oscPort, oscAddress};
+
+    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, bgGrp, trackerGrp, oscGrp};
     
     ofEventListeners listenerHolder;
 };
