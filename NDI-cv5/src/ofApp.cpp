@@ -4,6 +4,10 @@ using namespace ofxNDI::Recv;
 
 void ofApp::setup(){
 
+    ofSetFrameRate(60);
+    ofSetLogLevel(OF_LOG_NOTICE);
+    ofSetVerticalSync(false);
+    
     NDIlib_initialize();
 
     gui.setup("settings", "settings.json");
@@ -12,7 +16,9 @@ void ofApp::setup(){
     gui.add(soloMode);
     listenerHolder.push(connectNDIBtn.newListener([&](void){ connectNDI();}));
     
-    for(int i=0; i<10; i++){
+    gui.setPosition(10, 30);
+    
+    for(int i=0; i<3; i++){
         std::shared_ptr<NDIsource> ndi = make_shared<NDIsource>();
         ndi->prm.setName("NDI source " + ofToString(i+1));
         gui.add(ndi->prm);
@@ -28,6 +34,8 @@ void ofApp::setup(){
         ndis[i]->setup(camWidth, camHeight);
     }
     connectNDI();
+    
+    oscReceiver.setup(9999);
 }
 
 void ofApp::connectNDI(){
@@ -77,6 +85,40 @@ void ofApp::update(){
     }
     
     ofSetWindowTitle(ofToString((int)ofGetFrameRate()));
+    
+    receiveOsc();
+}
+
+void ofApp::receiveOsc(){
+    
+    oscNumArgs = 0;
+    
+    while(oscReceiver.hasWaitingMessages()){
+        
+        // get the next message
+        ofxOscMessage m;
+        oscReceiver.getNextMessage(m);
+        
+        // check for mouse moved message
+        if(m.getAddress() == "/grainpotision"){
+            // No idea to use this info so far
+        }
+        else if(m.getAddress() == "/grainsize"){
+            int nArgs = m.getNumArgs();
+            oscNumArgs += nArgs;
+        }
+    }
+    
+    if(oscNumArgs > 0){
+        
+        hasOscReceived = 4;
+
+        for(int i=0; i<ndis.size(); i++){
+            if(ndis[i]->getIsNDIConected()){
+                ndis[i]->glitch.doGlitch(oscNumArgs);
+            }
+        }
+    }
 }
 
 void ofApp::draw(){
@@ -97,6 +139,16 @@ void ofApp::draw(){
         if(!bHide){
             ofDisableDepthTest();
             gui.draw();
+            
+            ofPushMatrix();
+            ofTranslate(20, 180*5);
+            if(hasOscReceived-- > 0){
+                ofFill();
+                ofSetColor(200, 0, 100);
+                ofDrawCircle(0, 0, 5, 5);
+                ofDrawBitmapString("OSC received", 10, 10);
+            }
+            ofPopMatrix();
         }
 
     }else{
@@ -112,6 +164,7 @@ void ofApp::draw(){
     for (int i=0; i<ndis.size(); i++){
         ndis[i]->sendNDI();
     }
+
 }
 
 void ofApp::keyPressed(int key){
@@ -137,7 +190,11 @@ void ofApp::keyPressed(int key){
         
         case 's':
             ndis[0]->heatmap.save();
-        break;
+            break;
+            
+        case 'g':
+            ndis[0]->glitch.doGlitch(ofRandom(1, 10));
+            break;
     }
 }
 

@@ -58,13 +58,11 @@ public:
         heatmap.setup(w, h, 32);
         
         glitch.allocate(w, h);
-        glitch.setGlichResetProbability(0.5);
         
         combinedFbo.allocate(w, h, GL_RGBA);
         combinedFbo.begin();
         ofClear(255,255,255, 0);
         combinedFbo.end();
-
     }
     
     void setupNDI_OUT(){
@@ -296,7 +294,7 @@ public:
         ofPopStyle();
         
         // Glitch
-        senderGlitch.begin();       
+        senderGlitch.begin();
         glitch.draw(combinedFbo, 0, 0, camWidth, camHeight);
         senderGlitch.end();
         
@@ -398,6 +396,9 @@ public:
         ofDrawBitmapString(NDI_name, 0, 10);
     }
     
+    bool getIsNDIConected(){
+        return receiver.isConnected();
+    }
     
     void sendNDI(){
         if(ndiOut){

@@ -5,6 +5,7 @@
 #include "ofxGui.h"
 #include "NDIsource.h"
 #include "AppParam.h"
+#include "ofxOscReceiver.h"
 
 class ofApp : public ofBaseApp{
 	
@@ -14,6 +15,7 @@ public:
 	void draw();
     void connectNDI();
 	void keyPressed(int key);
+    void receiveOsc();
     
     bool bHide = false;
     vector<std::shared_ptr<NDIsource>> ndis;
@@ -24,5 +26,10 @@ public:
     ofParameter<void> connectNDIBtn{"Connect NDI"};
     ofParameter<int> soloMode{"Solo", 0, 0, 10};
     ofEventListeners listenerHolder;
+
+    // this is for receiving Re-consttuctor OSC
+    ofxOscReceiver oscReceiver;
     
+    int hasOscReceived = 0;
+    int oscNumArgs = 0;
 };
