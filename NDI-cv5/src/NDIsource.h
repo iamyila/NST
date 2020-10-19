@@ -49,18 +49,42 @@ public:
         listenerHolder.push(bgAlgo.newListener([&](int & algo){ setupBS(); }));
         listenerHolder.push(oscIp.newListener([&](string & ip){ setupOscSender(); }));
         listenerHolder.push(oscPort.newListener([&](int & port){ setupOscSender(); }));
+        listenerHolder.push(bDetectBlob.newListener([&](bool & b){ setupBS(); }));
+        listenerHolder.push(bHeatmap.newListener([&](bool & b){ setupHeatmap(); }));
+        listenerHolder.push(bGlitch.newListener([&](bool & b){ setupGlitch(); }));
         
         setupBS();
-        
-        // Effects
-        heatmap.setup(w, h, 32);
-        
-        glitch.allocate(w, h);
-        
-        combinedFbo.allocate(w, h, GL_RGBA);
-        combinedFbo.begin();
-        ofClear(255,255,255, 0);
-        combinedFbo.end();
+        setupHeatmap();
+        setupGlitch();
+    }
+    
+    
+    void setupBS(){
+        if(bDetectBlob){
+            if (bgAlgo==0){
+                pBackSub = cv::createBackgroundSubtractorMOG2();
+            }else{
+                pBackSub = cv::createBackgroundSubtractorKNN();
+            }
+        }
+    }
+
+    void setupHeatmap(){
+        if(bHeatmap){
+            heatmap.clear();
+            heatmap.setup(inputWidth, inputHeight);
+        }
+    }
+    
+    void setupGlitch(){
+        if(bGlitch){
+            glitch.allocate(inputWidth, inputHeight);
+            
+            combinedFbo.allocate(inputWidth, inputHeight, GL_RGBA);
+            combinedFbo.begin();
+            ofClear(255,255,255, 0);
+            combinedFbo.end();
+        }
     }
     
     void setupNDI_OUT(){
@@ -72,14 +96,6 @@ public:
             senderBlob.setup(nameBlob, inputWidth, inputHeight);
             senderHeatmap.setup(nameHeat, inputWidth, inputHeight);
             senderGlitch.setup(nameGlitch, inputWidth, inputHeight);
-        }
-    }
-    
-    void setupBS(){
-        if (bgAlgo==0){
-            pBackSub = cv::createBackgroundSubtractorMOG2();
-        }else{
-            pBackSub = cv::createBackgroundSubtractorKNN();
         }
     }
     
@@ -99,29 +115,41 @@ public:
                     int yres = frame.yres;
                     
                     if(xres != 0 && yres != 0 ){
-                        video.decodeTo(pixels);
-                        pixels.setImageType(OF_IMAGE_COLOR);
-                        currentImageFixed.setFromPixels(pixels);
+                            video.decodeTo(pixels);
+                            pixels.setImageType(OF_IMAGE_COLOR);
+                            currentImageFixed.setFromPixels(pixels);
 
-                        currentImage.scaleIntoMe(currentImageFixed);
-                        currentMat = ofxCv::toCv(currentImage);
-                        pBackSub->apply(currentMat, foregroundMat);
+                            currentImage.scaleIntoMe(currentImageFixed);
+                            currentMat = ofxCv::toCv(currentImage);
+                        if(bDetectBlob){
+                            pBackSub->apply(currentMat, foregroundMat);
+                            
+                            ofPixels pix;
+                            ofxCv::toOf(foregroundMat, pix);
+                            pix.setImageType(OF_IMAGE_GRAYSCALE);
+                            finalImage.setFromPixels(pix);
+                            
+                            findContour();
+                            
+                            sendNoteOnOff();
+                        }
                         
-                        ofPixels pix;
-                        ofxCv::toOf(foregroundMat, pix);
-                        pix.setImageType(OF_IMAGE_GRAYSCALE);
-                        finalImage.setFromPixels(pix);
+                        if(bHeatmap){
+                            //heatmap.update(OFX_HEATMAP_CS_SPECTRAL_SOFT);
+                            heatmap.update(OFX_HEATMAP_CS_RED_GRAY_MIXED);
+                        }
                         
-                        findContour();
-                        
-                        sendNoteOnOff();
                         drawFbo();
-                        
-                        //heatmap.update(OFX_HEATMAP_CS_SPECTRAL_SOFT);
-                        heatmap.update(OFX_HEATMAP_CS_RED_GRAY_MIXED);
                     }
                 }
             }
+        }
+        
+        // ofxHeatmap increase memory use, so we reset every 3 min.
+        
+        if( ofGetFrameNum() % (30*60*3) == 0){
+            heatmap.clear();
+            heatmap.setup(inputWidth, inputHeight);
         }
     }
 
@@ -194,112 +222,109 @@ public:
         int okBlobNum = 0;
 
         // FBO 1
-        senderHeatmap.begin();
-        ofSetColor(255, 100);
-        heatmap.draw(0, 0);
-        senderHeatmap.end();
+        if(bHeatmap){
+            senderHeatmap.begin();
+            ofSetColor(255, 100);
+            heatmap.draw(0, 0);
+            senderHeatmap.end();
+        }
         
         // FBO 2
-        senderBlob.begin();
-        
-        for(int i=0; i<nBlobs; i++){
-            int label = tracker.getCurrentLabels()[i];
-            int age = tracker.getAge(label);
-            ofxCvBlob & blob = contourFinder.blobs[i];
-            ofRectangle & rect = blob.boundingRect;
-            glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
+        if(bDetectBlob){
+            senderBlob.begin();
             
-            if(minAge <= age){
+            for(int i=0; i<nBlobs; i++){
+                int label = tracker.getCurrentLabels()[i];
+                int age = tracker.getAge(label);
+                ofxCvBlob & blob = contourFinder.blobs[i];
+                ofRectangle & rect = blob.boundingRect;
+                glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
                 
-                glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
-                float area = blob.area / (camWidth*camHeight);
-                
-                ofSetLineWidth(1);
-                ofNoFill();
-                ofPushMatrix();
-                
-                // Polyline & rect
-                ofNoFill();
-                blob.draw();
-                
-                if(0){
-                    ofTranslate(center.x+20, center.y);
-                    ofColor c;
-                    c.setHsb(label*10%255, 255, 255);
-                    ofSetColor(c);
-                    string msg = ofToString(label) + ":" + ofToString(age);
-                    ofDrawBitmapString(msg, 0, 0);
+                if(minAge <= age){
+                    
+                    glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
+                    float area = blob.area / (camWidth*camHeight);
+                    
+                    ofSetLineWidth(1);
+                    ofNoFill();
+                    ofPushMatrix();
+                    
+                    // Polyline & rect
+                    ofNoFill();
+                    blob.draw();
+                    
+                    if(0){
+                        ofTranslate(center.x+20, center.y);
+                        ofColor c;
+                        c.setHsb(label*10%255, 255, 255);
+                        ofSetColor(c);
+                        string msg = ofToString(label) + ":" + ofToString(age);
+                        ofDrawBitmapString(msg, 0, 0);
+                    }
+                    
+                    ofPopMatrix();
+                    
+                    // OSC
+                    ofxOscMessage m;
+                    m.setAddress(oscAddress.get() + "/" + ofToString(getOscAddressSlot(label)) +"/val");
+                    m.addIntArg(label);
+                    m.addFloatArg(center.x/camWidth);
+                    m.addFloatArg(center.y/camHeight);
+                    m.addFloatArg(glm::length(velocity));
+                    m.addFloatArg(area);
+                    m.addIntArg(age);
+                    
+                    // polar coordinate
+                    glm::vec2 p = toPolar(center.x, center.y, camWidth, camHeight);
+                    m.addFloatArg(p.x);
+                    m.addFloatArg(p.y);
+
+                    oscSender.sendMessage(m);
+                    
+                    okBlobNum++;
+                    
+                    // Effects
+                    float heatRadius = MIN(blob.area*0.05, 30);
+                    heatmap.setRadius(heatRadius);
+                    heatmap.addPoint(center.x, center.y);
+                    
+                    if(okBlobNum >= maxBlobNum) break;
+                }else {
+                    ofPushMatrix();
+                    ofTranslate(center);
+                    ofSetColor(255, 180);
+                    ofNoFill();
+                    ofSetRectMode(OF_RECTMODE_CENTER);
+                    ofDrawRectangle(0, 0, rect.width, rect.height);
+                    ofSetRectMode(OF_RECTMODE_CORNER);
+                     if(0){
+                        string msg = ofToString(label) + ":" + ofToString(age);
+                        ofDrawBitmapString(msg, 0, 0);
+                     }
+                    ofPopMatrix();
                 }
-                
-                ofPopMatrix();
-                
-                // OSC
-                ofxOscMessage m;
-                m.setAddress(oscAddress.get() + "/" + ofToString(getOscAddressSlot(label)) +"/val");
-                m.addIntArg(label);
-                m.addFloatArg(center.x/camWidth);
-                m.addFloatArg(center.y/camHeight);
-                m.addFloatArg(glm::length(velocity));
-                m.addFloatArg(area);
-                m.addIntArg(age);
-                
-                // polar coordinate
-                glm::vec2 p = toPolar(center.x, center.y, camWidth, camHeight);
-                m.addFloatArg(p.x);
-                m.addFloatArg(p.y);
-
-                oscSender.sendMessage(m);
-                
-                okBlobNum++;
-                
-                // Effects
-                float heatRadius = MIN(blob.area*0.05, 30);
-                heatmap.setRadius(heatRadius);
-                heatmap.addPoint(center.x, center.y);
-                
-                if(okBlobNum >= maxBlobNum) break;
-            }else {
-                ofPushMatrix();
-                ofTranslate(center);
-                ofSetColor(255, 180);
-                ofNoFill();
-                ofSetRectMode(OF_RECTMODE_CENTER);
-                ofDrawRectangle(0, 0, rect.width, rect.height);
-                ofSetRectMode(OF_RECTMODE_CORNER);
-                 if(0){
-                    string msg = ofToString(label) + ":" + ofToString(age);
-                    ofDrawBitmapString(msg, 0, 0);
-                 }
-                ofPopMatrix();
             }
+            ofPopMatrix();
+            senderBlob.end();
+        } // end of FBO 2
+
+        if(bGlitch){
+            ofPushStyle();
+            ofEnableAlphaBlending();
+            combinedFbo.begin();
+            ofClear(0,0,0,0);
+            ofSetColor(255);
+            currentImage.draw(0,0,camWidth,camHeight);
+            if(bDetectBlob) senderBlob.draw(0,0,camWidth, camHeight);
+            if(bHeatmap) senderHeatmap.draw(0,0,camWidth, camHeight);
+            combinedFbo.end();
+            ofPopStyle();
+            
+            // Glitch
+            senderGlitch.begin();
+            glitch.draw(combinedFbo, 0, 0, camWidth, camHeight);
+            senderGlitch.end();
         }
-        ofPopMatrix();
-
-//        for debug
-//        ofPushStyle();
-//        ofNoFill();
-//        ofSetColor(0,0,255);
-//        ofDrawRectangle(1,1,camWidth-2, camHeight-2);
-//        ofPopStyle();
-        
-        senderBlob.end();
-
-        ofPushStyle();
-        ofEnableAlphaBlending();
-        combinedFbo.begin();
-        ofClear(0,0,0,0);
-        ofSetColor(255);
-        currentImage.draw(0,0,camWidth,camHeight);
-        senderBlob.draw(0,0,camWidth, camHeight);
-        senderHeatmap.draw(0,0,camWidth, camHeight);
-        combinedFbo.end();
-        ofPopStyle();
-        
-        // Glitch
-        senderGlitch.begin();
-        glitch.draw(combinedFbo, 0, 0, camWidth, camHeight);
-        senderGlitch.end();
-        
     }
     
     glm::vec2 toPolar(float x, float y, float w, float h){
@@ -343,37 +368,48 @@ public:
         
         if(receiver.isConnected()){
             
-            int w = inputWidth/2.5;
-            int h = inputHeight/2.5;
+            int h = ofGetHeight() / 8;
+            int w = h * 1920/1080;
             
+            int ty = 0;
             ofPushStyle();
-            ofEnableAlphaBlending();
             ofSetColor(255);
             
             // 1
             currentImage.draw(0,0,w,h);
 
-            // 2
-            ofxCv::drawMat(foregroundMat,0, h+10,w,h);  //////??????
+            if(bDetectBlob){
+                // 2
+                ty += h+10;
+                ofxCv::drawMat(foregroundMat,0, ty,w,h);  //////??????
 
-            ofEnableAlphaBlending();
+                ofEnableAlphaBlending();
+                
+                // 3
+                ty += h+10;
+                senderBlob.draw(0, ty, w, h);
+            }
+    
+            if(bHeatmap){
+                // 4
+                ty += h+10;
+                senderHeatmap.draw(0, ty, w, h);
+            }
             
-            // 3
-            senderBlob.draw(0, h*2+20, w, h);
-            
-            // 4
-            senderHeatmap.draw(0, h*3+30, w, h);
-        
-            // 5
-            combinedFbo.draw(0, h*4+40, w, h);
-            
-            // 6
-            senderGlitch.draw(0, h*5+50, w, h);
-            
+            if(bGlitch){
+                // 5
+                ty += h+10;
+                combinedFbo.draw(0, ty, w, h);
+                
+                // 6
+                ty += h+10;
+                senderGlitch.draw(0, ty, w, h);
+            }
             
             // 7 info text
+            ty += h+10+10;
             ofPushMatrix();
-            ofTranslate(0, h*6+60+10);
+            ofTranslate(0, ty);
             ofSetColor(255);
             ofDrawBitmapString("label   age   OscAdrsSlot", 0, -5);
             char c[255];
@@ -472,7 +508,13 @@ public:
     ofParameter<string> oscAddress{"oscAddress", "NDITracker"};
     ofParameterGroup oscGrp{"OSC send", oscIp, oscPort, oscAddress};
 
-    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, bgGrp, trackerGrp, oscGrp};
+    // layers
+    ofParameter<bool> bDetectBlob{"Detect Blob", true};
+    ofParameter<bool> bHeatmap{"Heat Map", true};
+    ofParameter<bool> bGlitch{"Glitch", true};
+    ofParameterGroup layerGrp{"Layer", bDetectBlob, bHeatmap, bGlitch};
+    
+    ofParameterGroup prm{"NDI source", NDI_name, showNDI, ndiOut, bgGrp, trackerGrp, oscGrp, layerGrp};
     
     ofEventListeners listenerHolder;
 };

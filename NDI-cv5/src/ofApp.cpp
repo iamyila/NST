@@ -4,8 +4,7 @@ using namespace ofxNDI::Recv;
 
 void ofApp::setup(){
 
-    ofSetFrameRate(60);
-    ofSetLogLevel(OF_LOG_NOTICE);
+
     ofSetVerticalSync(false);
     
     NDIlib_initialize();
@@ -16,7 +15,7 @@ void ofApp::setup(){
     gui.add(soloMode);
     listenerHolder.push(connectNDIBtn.newListener([&](void){ connectNDI();}));
     
-    gui.setPosition(10, 30);
+    gui.setPosition(10, 20);
     
     for(int i=0; i<10; i++){
         std::shared_ptr<NDIsource> ndi = make_shared<NDIsource>();
@@ -28,8 +27,8 @@ void ofApp::setup(){
     gui.loadFromFile("settings.json");
     gui.minimizeAll();
 
-    int camWidth = 640; //1280; //1920; //640;
-    int camHeight = 360; //720;1080; //360;
+    int camWidth = 1280; //1280; //1920; //640;
+    int camHeight = 720; //720;1080; //360;
     for(int i=0; i<ndis.size(); i++){
         ndis[i]->setup(camWidth, camHeight);
     }
@@ -115,7 +114,9 @@ void ofApp::receiveOsc(){
 
         for(int i=0; i<ndis.size(); i++){
             if(ndis[i]->getIsNDIConected()){
-                ndis[i]->glitch.doGlitch(oscNumArgs);
+                if(ndis[i]->bGlitch){
+                    ndis[i]->glitch.doGlitch(oscNumArgs);
+                }
             }
         }
     }
@@ -125,7 +126,7 @@ void ofApp::draw(){
     
     if(soloMode == 0){
         ofPushMatrix();
-        ofTranslate(220, 30);
+        ofTranslate(220, 20);
         ofSetColor(255);
         
         for (int i=0; i<ndis.size(); i++){
@@ -138,17 +139,7 @@ void ofApp::draw(){
     
         if(!bHide){
             ofDisableDepthTest();
-            gui.draw();
-            
-            ofPushMatrix();
-            ofTranslate(20, 180*5 - 90);
-            if(hasOscReceived-- > 0){
-                ofFill();
-                ofSetColor(200, 0, 100);
-                ofDrawCircle(0, 0, 5, 5);
-                ofDrawBitmapString("OSC received", 10, 5);
-            }
-            ofPopMatrix();
+            gui.draw();            
         }
 
     }else{
