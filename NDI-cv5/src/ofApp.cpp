@@ -4,9 +4,8 @@ using namespace ofxNDI::Recv;
 
 void ofApp::setup(){
 
-
-    ofSetVerticalSync(false);
-    
+	ofSetWindowShape(500, 1000);
+	ofSetWindowPosition(0, 25);
     NDIlib_initialize();
 
     gui.setup("settings", "settings.json");
