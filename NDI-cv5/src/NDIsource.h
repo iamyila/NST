@@ -74,9 +74,9 @@ public:
     
     void setupGlitch(){
         if(bGlitch){
-            glitch.allocate(inputWidth/2, inputHeight/2);
+            glitch.allocate(inputWidth, inputHeight);
             
-            combinedFbo.allocate(inputWidth/2, inputHeight/2, GL_RGBA);
+            combinedFbo.allocate(inputWidth, inputHeight, GL_RGBA);
             combinedFbo.begin();
             ofClear(255,255,255, 0);
             combinedFbo.end();
@@ -91,7 +91,7 @@ public:
 
             senderBlob.setup(nameBlob, inputWidth, inputHeight);
             senderHeatmap.setup(nameHeat, inputWidth, inputHeight);
-            senderGlitch.setup(nameGlitch, inputWidth/2, inputHeight/2);
+            senderGlitch.setup(nameGlitch, inputWidth, inputHeight);
         }
     }
     

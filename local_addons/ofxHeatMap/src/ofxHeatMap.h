@@ -229,9 +229,11 @@ public:
 
     void update(const heatmap_colorscheme_t* colorscheme)
     {
-        heatmap_render_to(mHeatMap, colorscheme, &mColorBuf[0]);
-        mHeatMapImg.setFromPixels(&mColorBuf[0], mHeatMap->w, mHeatMap->h, OF_IMAGE_COLOR_ALPHA);
-        mColorBuf.clear();
+		if (mColorBuf.size() != 0) {
+			heatmap_render_to(mHeatMap, colorscheme, &mColorBuf[0]);
+			mHeatMapImg.setFromPixels(&mColorBuf[0], mHeatMap->w, mHeatMap->h, OF_IMAGE_COLOR_ALPHA);
+			mColorBuf.clear();
+		}
     }
     
     void draw()
