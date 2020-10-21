@@ -2,9 +2,16 @@
 
 
 void ofApp::setup(){
+
+	ofSetVerticalSync(false);
+	ofDisableAlphaBlending();
+	ofDisableDepthTest();
+	ofSetFrameRate(60);
+	ofSetWindowShape(1080, 720);
+	ofSetWindowPosition(0, 40);
+
     NDIlib_initialize();
     ofBackground(0);
-    ofSetFrameRate(60);
     auto findSource = [](const string &name_or_url) {
         auto sources = ofxNDI::listSources();
         if(name_or_url == "") {
