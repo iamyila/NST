@@ -40,9 +40,10 @@ public:
         currentImageFixed.allocate(w,h);
         finalImage.allocate(w,h);
 
-        // NDI sender
+        setupBS();
+        setupHeatmap();
+        setupGlitch();
         setupNDI_OUT();
-        
         setupOscSender();
         
         listenerHolder.push(ndiOut.newListener([&](bool & b){ setupNDI_OUT(); }));
@@ -52,12 +53,7 @@ public:
         listenerHolder.push(bDetectBlob.newListener([&](bool & b){ setupBS(); }));
         listenerHolder.push(bHeatmap.newListener([&](bool & b){ setupHeatmap(); }));
         listenerHolder.push(bGlitch.newListener([&](bool & b){ setupGlitch(); }));
-        
-        setupBS();
-        setupHeatmap();
-        setupGlitch();
-    }
-    
+    }    
     
     void setupBS(){
         if(bDetectBlob){
@@ -78,9 +74,9 @@ public:
     
     void setupGlitch(){
         if(bGlitch){
-            glitch.allocate(inputWidth, inputHeight);
+            glitch.allocate(inputWidth/2, inputHeight/2);
             
-            combinedFbo.allocate(inputWidth, inputHeight, GL_RGBA);
+            combinedFbo.allocate(inputWidth/2, inputHeight/2, GL_RGBA);
             combinedFbo.begin();
             ofClear(255,255,255, 0);
             combinedFbo.end();
@@ -95,7 +91,7 @@ public:
 
             senderBlob.setup(nameBlob, inputWidth, inputHeight);
             senderHeatmap.setup(nameHeat, inputWidth, inputHeight);
-            senderGlitch.setup(nameGlitch, inputWidth, inputHeight);
+            senderGlitch.setup(nameGlitch, inputWidth/2, inputHeight/2);
         }
     }
     
@@ -312,17 +308,20 @@ public:
             ofPushStyle();
             ofEnableAlphaBlending();
             combinedFbo.begin();
+            int w = combinedFbo.getWidth();
+            int h = combinedFbo.getHeight();
+            
             ofClear(0,0,0,0);
             ofSetColor(255);
-            currentImage.draw(0,0,camWidth,camHeight);
-            if(bDetectBlob) senderBlob.draw(0,0,camWidth, camHeight);
-            if(bHeatmap) senderHeatmap.draw(0,0,camWidth, camHeight);
+            currentImage.draw(0,0,w,h);
+            if(bDetectBlob) senderBlob.draw(0,0,w,h);
+            if(bHeatmap) senderHeatmap.draw(0,0,w,h);
             combinedFbo.end();
             ofPopStyle();
             
             // Glitch
             senderGlitch.begin();
-            glitch.draw(combinedFbo, 0, 0, camWidth, camHeight);
+            glitch.draw(combinedFbo, 0, 0, w, h);
             senderGlitch.end();
         }
     }

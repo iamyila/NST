@@ -44,6 +44,10 @@ public:
         fbo.end();
     }
 
+    void draw(int x, int y){
+        fbo.draw(x, y, fbo.getWidth(), fbo.getHeight());
+    }
+    
     void draw(int x, int y, int w, int h){
         fbo.draw(x, y, w, h);
     }
