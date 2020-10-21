@@ -451,7 +451,9 @@ public:
     // receive
     ofxNDIReceiver receiver;
     ofxNDIRecvVideoFrameSync video;
-    ofPixels pixels;
+	//ofxNDIRecvVideoThreading video;
+
+	ofPixels pixels;
     ofxCvColorImage currentImage;
     ofxCvColorImage currentImageFixed;
     ofxCvGrayscaleImage finalImage;
