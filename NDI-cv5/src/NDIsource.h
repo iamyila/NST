@@ -8,15 +8,15 @@
 #include "ofxNDIVideoGrabber.h"
 #include "ofxNDIReceiver.h"
 #include "ofxNDIRecvStream.h"
+#include "ofxNDISender.h"
+#include "ofxNDISendStream.h"
 #include "ofxOpenCv.h"
 #include "ofxCv.h"
 #include "ofxOsc.h"
 #include "ofxGui.h"
-#include "ofxNDISender.h"
-#include "ofxNDISendStream.h"
+#include "ofxEasyFboGlitch.h"
 #include "ofxHeatMap.h"
 #include "NDISender.h"  // my own helper class
-#include "ofxEasyFboGlitch.h"
 
 using std::string;
 
