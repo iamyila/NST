@@ -321,7 +321,7 @@ public:
             
             // Glitch
             senderGlitch.begin();
-            glitch.draw(combinedFbo, 0, 0, w, h);
+            glitch.draw(combinedFbo, 0, h, w, -h);
             senderGlitch.end();
         }
     }
