@@ -4,8 +4,10 @@
 ofxEasyFboGlitch::ofxEasyFboGlitch(){
     fboW=320;
     fboH=240;
-    imgQuality =OF_IMAGE_QUALITY_WORST;
+    //imgQuality =OF_IMAGE_QUALITY_WORST;
     //imgQuality =OF_IMAGE_QUALITY_BEST;
+	imgQuality = OF_IMAGE_QUALITY_LOW;
+
     fbo.allocate(fboW,fboH);
     glitchResetProbability=0.3;
 }

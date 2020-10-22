@@ -113,16 +113,15 @@ public:
                     if(xres != 0 && yres != 0 ){
                             video.decodeTo(pixels);
                             pixels.setImageType(OF_IMAGE_COLOR);
-                            currentImageFixed.setFromPixels(pixels);
+							currentImage.setFromPixels(pixels);
 
-                            currentImage.scaleIntoMe(currentImageFixed);
+                            //currentImage.scaleIntoMe(currentImageFixed);
                             currentMat = ofxCv::toCv(currentImage);
                         if(bDetectBlob){
                             pBackSub->apply(currentMat, foregroundMat);
                             
                             ofPixels pix;
                             ofxCv::toOf(foregroundMat, pix);
-                            pix.setImageType(OF_IMAGE_GRAYSCALE);
                             finalImage.setFromPixels(pix);
                             
                             findContour();
@@ -379,8 +378,8 @@ public:
 
             if(bDetectBlob){
                 // 2
-                ty += h+10;
-                ofxCv::drawMat(foregroundMat,0, ty,w,h);  //////??????
+                //ty += h+10;
+                //ofxCv::drawMat(foregroundMat,0, ty,w,h);
 
                 ofEnableAlphaBlending();
                 
