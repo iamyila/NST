@@ -1,5 +1,5 @@
 ofxGui
-ofxNDI
+../local_addons/ofxNDI
 ofxOpenCv
 ofxOsc
 ../local_addons/ofxCv
