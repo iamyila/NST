@@ -227,12 +227,23 @@ public:
         update(heatmap_cs_default);
     }
 
+	void update(int colorSchemeId)
+	{
+		if (0 <= colorSchemeId && colorSchemeId < schemes.size()) {			
+			update(schemes[colorSchemeId]);
+		}
+		else {
+			update(heatmap_cs_default);
+
+		}
+	}
+
     void update(const heatmap_colorscheme_t* colorscheme)
     {
 		if (mColorBuf.size() != 0) {
 			heatmap_render_to(mHeatMap, colorscheme, &mColorBuf[0]);
 			mHeatMapImg.setFromPixels(&mColorBuf[0], mHeatMap->w, mHeatMap->h, OF_IMAGE_COLOR_ALPHA);
-			mColorBuf.clear();
+			//mColorBuf.clear();
 		}
     }
     
@@ -307,4 +318,116 @@ private:
     ofImage mHeatMapImg;
     std::vector<unsigned char> mColorBuf;
     unsigned int mRadius;
+
+public:
+	vector<const heatmap_colorscheme_t*> schemes = {
+		heatmap_cs_Spectral_discrete,
+		heatmap_cs_Spectral_soft,
+		heatmap_cs_Spectral_mixed,
+		heatmap_cs_Spectral_mixed_exp,
+		heatmap_cs_RdYlGn_discrete,
+		heatmap_cs_RdYlGn_soft,
+		heatmap_cs_RdYlGn_mixed,
+		heatmap_cs_RdYlGn_mixed_exp,
+		heatmap_cs_RdYlBu_discrete,
+		heatmap_cs_RdYlBu_soft,
+		heatmap_cs_RdYlBu_mixed,
+		heatmap_cs_RdYlBu_mixed_exp,
+		heatmap_cs_RdGy_discrete,
+		heatmap_cs_RdGy_soft,
+		heatmap_cs_RdGy_mixed,
+		heatmap_cs_RdGy_mixed_exp,
+		heatmap_cs_RdBu_discrete,
+		heatmap_cs_RdBu_soft,
+		heatmap_cs_RdBu_mixed,
+		heatmap_cs_RdBu_mixed_exp,
+		heatmap_cs_PuOr_discrete,
+		heatmap_cs_PuOr_soft,
+		heatmap_cs_PuOr_mixed,
+		heatmap_cs_PuOr_mixed_exp,
+		heatmap_cs_PRGn_discrete,
+		heatmap_cs_PRGn_soft,
+		heatmap_cs_PRGn_mixed,
+		heatmap_cs_PRGn_mixed_exp,
+		heatmap_cs_PiYG_discrete,
+		heatmap_cs_PiYG_soft,
+		heatmap_cs_PiYG_mixed,
+		heatmap_cs_PiYG_mixed_exp,
+		heatmap_cs_BrBG_discrete,
+		heatmap_cs_BrBG_soft,
+		heatmap_cs_BrBG_mixed,
+		heatmap_cs_BrBG_discrete,
+		heatmap_cs_Blues_discrete,
+		heatmap_cs_Blues_soft,
+		heatmap_cs_Blues_mixed,
+		heatmap_cs_Blues_mixed_exp,
+		heatmap_cs_Greens_discrete,
+		heatmap_cs_Greens_soft,
+		heatmap_cs_Greens_mixed,
+		heatmap_cs_Greens_mixed_exp,
+		heatmap_cs_Greys_discrete,
+		heatmap_cs_Greys_soft,
+		heatmap_cs_Greys_mixed,
+		heatmap_cs_Greys_mixed_exp,
+		heatmap_cs_Oranges_discrete,
+		heatmap_cs_Oranges_soft,
+		heatmap_cs_Oranges_mixed,
+		heatmap_cs_Oranges_mixed_exp,
+		heatmap_cs_Purples_discrete,
+		heatmap_cs_Purples_soft,
+		heatmap_cs_Purples_mixed,
+		heatmap_cs_Purples_mixed_exp,
+		heatmap_cs_Reds_discrete,
+		heatmap_cs_Reds_soft,
+		heatmap_cs_Reds_mixed,
+		heatmap_cs_Reds_mixed_exp,
+		heatmap_cs_BuGn_discrete,
+		heatmap_cs_BuGn_soft,
+		heatmap_cs_BuGn_mixed,
+		heatmap_cs_BuGn_mixed_exp,
+		heatmap_cs_BuPu_discrete,
+		heatmap_cs_BuPu_soft,
+		heatmap_cs_BuPu_mixed,
+		heatmap_cs_BuPu_mixed_exp,
+		heatmap_cs_GnBu_discrete,
+		heatmap_cs_GnBu_soft,
+		heatmap_cs_GnBu_mixed,
+		heatmap_cs_GnBu_mixed_exp,
+		heatmap_cs_OrRd_discrete,
+		heatmap_cs_OrRd_soft,
+		heatmap_cs_OrRd_mixed,
+		heatmap_cs_OrRd_mixed_exp,
+		heatmap_cs_PuBuGn_discrete,
+		heatmap_cs_PuBuGn_soft,
+		heatmap_cs_PuBuGn_mixed,
+		heatmap_cs_PuBuGn_mixed_exp,
+		heatmap_cs_PuBu_discrete,
+		heatmap_cs_PuBu_soft,
+		heatmap_cs_PuBu_mixed,
+		heatmap_cs_PuBu_mixed_exp,
+		heatmap_cs_PuRd_discrete,
+		heatmap_cs_PuRd_soft,
+		heatmap_cs_PuRd_mixed,
+		heatmap_cs_PuRd_mixed_exp,
+		heatmap_cs_RdPu_discrete,
+		heatmap_cs_RdPu_soft,
+		heatmap_cs_RdPu_mixed,
+		heatmap_cs_RdPu_mixed_exp,
+		heatmap_cs_YlGnBu_discrete,
+		heatmap_cs_YlGnBu_soft,
+		heatmap_cs_YlGnBu_mixed,
+		heatmap_cs_YlGnBu_mixed_exp,
+		heatmap_cs_YlGn_discrete,
+		heatmap_cs_YlGn_soft,
+		heatmap_cs_YlGn_mixed,
+		heatmap_cs_YlGn_mixed_exp,
+		heatmap_cs_YlOrBr_discrete,
+		heatmap_cs_YlOrBr_soft,
+		heatmap_cs_YlOrBr_mixed,
+		heatmap_cs_YlOrBr_mixed_exp,
+		heatmap_cs_b2w,
+		heatmap_cs_b2w_opaque,
+		heatmap_cs_w2b,
+		heatmap_cs_w2b_opaque
+	};
 };
