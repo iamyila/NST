@@ -4,7 +4,7 @@ using namespace ofxNDI::Recv;
 
 void ofApp::setup(){
 
-	ofSetWindowShape(500, 1000);
+	ofSetWindowShape(700, 1000);
 	ofSetWindowPosition(0, 25);
     NDIlib_initialize();
 
@@ -16,7 +16,7 @@ void ofApp::setup(){
     
     gui.setPosition(10, 20);
     
-    for(int i=0; i<10; i++){
+    for(int i=0; i<1; i++){
         std::shared_ptr<NDIsource> ndi = make_shared<NDIsource>();
         ndi->prm.setName("NDI source " + ofToString(i+1));
         gui.add(ndi->prm);
@@ -47,7 +47,7 @@ void ofApp::connectNDI(){
     
     for (int i=0; i <ndis.size(); i++){
         shared_ptr<NDIsource> ndi = ndis[i];
-        if (!ndi->showNDI) continue;
+        if (!ndi->ndiIn) continue;
         
         string name_or_url = ndi->NDI_name;
         if(name_or_url == "") continue;
@@ -128,11 +128,18 @@ void ofApp::draw(){
         ofTranslate(220, 20);
         ofSetColor(255);
         
+		int xpos = 0;
         for (int i=0; i<ndis.size(); i++){
-            ofPushMatrix();
-            ofTranslate(i*360, 0);
+    			
+			ofPushMatrix();
+            ofTranslate(xpos, 0);
             ndis[i]->draw();
             ofPopMatrix();
+
+			int nMon = ndis[i]->getNumMonitor();
+			int h = (ofGetHeight() - 200) / nMon - 10;
+			int w = h * 1920 / 1080;
+			xpos += (w + 10);
         }
         ofPopMatrix();
     

@@ -13,7 +13,7 @@ public:
     NDISender(){};
     ~NDISender(){};
 
-    void setup(string name, int w, int h){
+	void setup(string name, int w, int h, bool bNDIOut) {
         // Fbo
         fbo.allocate(w, h, GL_RGBA);
         fbo.begin();
@@ -21,16 +21,19 @@ public:
         fbo.end();
         
         // NDI
-        if(!sender.isSetup()){
-            std::string streamOutName =  name;
-            ofLogNotice() << "Setup NDI sender: " << streamOutName;
-            if(sender.setup(streamOutName)) {
-                senderVideo.setup(sender);
-                senderVideo.setAsync(true);
-            }else{
-                ofLogError() << "Can not setup NDI HeatMap";
-            }
-        }
+		if (bNDIOut) {
+			if (!sender.isSetup()) {
+				std::string streamOutName = name;
+				ofLogNotice() << "Setup NDI sender: " << streamOutName;
+				if (sender.setup(streamOutName)) {
+					senderVideo.setup(sender);
+					senderVideo.setAsync(true);
+				}
+				else {
+					ofLogError() << "Can not setup NDI HeatMap";
+				}
+			}
+		}
     }
     
     
@@ -59,10 +62,12 @@ public:
         }
     }
     
-//    void sendExternalFbo(const ofFbo & fbo){
-//        fbo.readToPixels(pixels);
-//        senderVideo.send(pixels);
-//    }
+	void clear() {
+		fbo.clear();
+		pixels.clear();
+		sender.disconnect();
+	}
+
     
 private:
     ofxNDISender sender;    
