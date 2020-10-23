@@ -167,7 +167,6 @@ void ofApp::draw(){
 void ofApp::keyPressed(int key){
 
     if(48<=key && key< 58){
-        cout << key << endl;
         soloMode = key-48;
     }
     
