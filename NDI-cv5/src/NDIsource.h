@@ -34,7 +34,8 @@ public:
         finalImage.allocate(w,h);
 
         setupAll();
-        
+
+		listenerHolder.push(ndiInHighestBandwidth.newListener([&](bool& b) { /*disconnect();*/  connect(); }));
 		listenerHolder.push(ndiOut.newListener([&](bool& b) { setupAll(); }));
         listenerHolder.push(bgAlgo.newListener([&](int & algo){ setupBS(); }));
         listenerHolder.push(oscIp.newListener([&](string & ip){ setupOscSender(); }));
@@ -435,7 +436,7 @@ public:
 	}
 
 	void connect() {
-		receiver.connect(NDI_name);
+		receiver.connect(NDI_name, ndiInHighestBandwidth);
 	}
 
 	void disconnect() {
@@ -476,7 +477,8 @@ public:
     ofParameter<string> NDI_name{"Name", "sender1"};
     ofParameter<bool> ndiIn{"NDI IN",false};
     ofParameter<bool> ndiOut{"NDI OUT", false};
-    
+	ofParameter<bool> ndiInHighestBandwidth{ "NDI In Highest Bandwidth", false };
+
     // cv::BackgroundSubtractor
     cv::Ptr<cv::BackgroundSubtractor> pBackSub;
     cv::Mat currentMat, foregroundMat;
@@ -518,7 +520,7 @@ public:
     ofParameter<bool> bGlitch{"Glitch", true};
     ofParameterGroup layerGrp{"Layer", bDetectBlob, bHeatmap, bGlitch};
     
-    ofParameterGroup prm{"NDI source", NDI_name, ndiIn, ndiOut, bgGrp, trackerGrp, oscGrp, heatmapGrp, layerGrp};
+    ofParameterGroup prm{"NDI source", NDI_name, ndiIn, ndiInHighestBandwidth, ndiOut, bgGrp, trackerGrp, oscGrp, heatmapGrp, layerGrp};
     
     ofEventListeners listenerHolder;
 };

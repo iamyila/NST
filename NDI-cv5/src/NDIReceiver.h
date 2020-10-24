@@ -27,7 +27,7 @@ public:
 		pixels.allocate(w, h, GL_RGBA);
 	}
 
-	void connect(string name) {
+	void connect(string name, bool highestBandwidth) {
 		if (name == "") {
 			return;
 		}
@@ -41,10 +41,19 @@ public:
 			cout << ".";
 
 			if (found) {
-				receiver.setup(s);
-				cout << " ok!" << endl;
-				video.setup(receiver);
-				break;
+				ofxNDIReceiver::Settings settings;
+				settings.bandwidth = highestBandwidth
+					? NDIlib_recv_bandwidth_highest
+					: NDIlib_recv_bandwidth_lowest;
+				bool ok = receiver.setup(s, settings);
+				
+				if (ok) {
+					cout << "OK! connected with " 
+						 << (highestBandwidth ? "Highest" : "Lowest") 
+						 << " Bandwidth" << endl;					
+					video.setup(receiver);
+					break;
+				};
 			}
 		}
 		if (!found) {
