@@ -27,9 +27,9 @@ public:
 		pixels.allocate(w, h, GL_RGBA);
 	}
 
-	void connect(string name, bool highestBandwidth) {
+	string connect(string name /*, bool highestBandwidth*/) {
 		if (name == "") {
-			return;
+			return "";
 		}
 
 		auto sources = ofxNDI::listSources();
@@ -43,21 +43,32 @@ public:
 		cout << "Try to connect to " << name << " ...";
 
 		bool found = false;
+		string longName = "";
 		for (auto& s : sources) {
-			found = ofIsStringInString(s.p_ndi_name, name) || ofIsStringInString(s.p_url_address, name);
+			found = ofIsStringInString(s.p_ndi_name, name);
 			
 			if (found) {
+				longName = s.p_ndi_name;
+				/*
+
+				lowest bandwidth automatically use 640x360
+				no matter what resolution we send from OBS
+				
 				ofxNDIReceiver::Settings settings;
 				settings.bandwidth = highestBandwidth
 					? NDIlib_recv_bandwidth_highest
 					: NDIlib_recv_bandwidth_lowest;
-				bool ok = receiver.setup(s, settings);
-				
+
+				bool ok= receiver.setup(s, settings);
+				*/
+				bool ok = receiver.setup(s);
+
 				if (ok) {
 					cout << " OK!" << '\n';
-					cout << "Connected with " 
+					/*cout << "Connected with " 
 						 << (highestBandwidth ? "Highest" : "Lowest") 
 						 << " Bandwidth" << '\n';					
+					*/
 					video.setup(receiver);
 					break;
 				};
@@ -69,10 +80,19 @@ public:
 		}
 		cout << endl;
 
+		return longName;
 	}
 
 	bool isConnected() {
 		return receiver.isConnected();
+	}
+
+	int getWidth() {
+		return xres;
+	}
+
+	int getHeight() {
+		return yres;
 	}
 
 	bool update() {
@@ -81,8 +101,8 @@ public:
 
 			if (video.isFrameNew()) {
 				auto& frame = video.getFrame();
-				int xres = frame.xres;
-				int yres = frame.yres;
+				xres = frame.xres;
+				yres = frame.yres;
 
 				if (xres != 0 && yres != 0) {
 					video.decodeTo(pixels);
@@ -107,4 +127,7 @@ private:
 	//ofxNDIRecvVideoThreading video;
 
 	ofPixels pixels;
+	int xres = 0;
+	int yres = 0;
+
 };

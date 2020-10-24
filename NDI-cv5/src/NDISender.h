@@ -15,7 +15,8 @@ public:
 
 	void setup(string name, int w, int h, bool bNDIOut) {
         // Fbo
-        fbo.allocate(w, h, GL_RGBA);
+		fbo.clear();
+		fbo.allocate(w, h, GL_RGBA);
         fbo.begin();
         ofClear(255,255,255, 0);
         fbo.end();

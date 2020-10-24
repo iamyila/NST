@@ -26,19 +26,15 @@ void ofApp::setup(){
     gui.loadFromFile("settings.json");
     gui.minimizeAll();
 
-    int camWidth = 1280; //1280; //1920; //640;
-    int camHeight = 720; //720;1080; //360;
-    for(int i=0; i<ndis.size(); i++){
-        ndis[i]->setup(camWidth, camHeight);
-    }
     connectNDI();
     
     oscReceiver.setup(9999);
 }
 
 void ofApp::connectNDI(){
-      
-    for (int i=0; i <ndis.size(); i++){
+
+	for (int i = 0; i < ndis.size(); i++) {
+		ndis[i]->setup();
 		ndis[i]->connect();
     }    
 }

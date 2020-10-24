@@ -24,27 +24,46 @@ using std::string;
 class NDIsource{
     
 public:
-    NDIsource(){};
+    NDIsource(){
+		registerCallback();
+	};
     
-    void setup(int w, int h){
-        
-        inputWidth = w;
-        inputHeight = h;
+    void setup(){
+
+        int w = processWidth;
+        int h = processHeight;
+		currentImage.clear();
         currentImage.allocate(w,h);
-        finalImage.allocate(w,h);
+
+		finalImage.clear();
+		finalImage.allocate(w,h);
 
         setupAll();
-
-		listenerHolder.push(ndiInHighestBandwidth.newListener([&](bool& b) { /*disconnect();*/  connect(); }));
-		listenerHolder.push(ndiOut.newListener([&](bool& b) { setupAll(); }));
-        listenerHolder.push(bgAlgo.newListener([&](int & algo){ setupBS(); }));
-        listenerHolder.push(oscIp.newListener([&](string & ip){ setupOscSender(); }));
-        listenerHolder.push(oscPort.newListener([&](int & port){ setupOscSender(); }));
-        listenerHolder.push(bDetectBlob.newListener([&](bool & b){ setupBS(); }));
-        listenerHolder.push(bHeatmap.newListener([&](bool & b){ setupHeatmap(); }));
-        listenerHolder.push(bGlitch.newListener([&](bool & b){ setupGlitch(); }));
     }    
     
+
+	void connect() {
+		longName = receiver.connect(NDI_name /*, ndiInHighestBandwidth*/);
+	}
+
+	void disconnect() {
+		receiver.disconnect();
+		longName = "";
+	}
+
+	void registerCallback() {
+		listenerHolder.push(processWidth.newListener([&](int& i) { setup(); }));
+		listenerHolder.push(processHeight.newListener([&](int& i) { setup(); }));
+		//listenerHolder.push(ndiInHighestBandwidth.newListener([&](bool& b) { /*disconnect();*/  connect(); }));
+		listenerHolder.push(ndiOut.newListener([&](bool& b) { setupAll(); }));
+		listenerHolder.push(bgAlgo.newListener([&](int& algo) { setupBS(); }));
+		listenerHolder.push(oscIp.newListener([&](string& ip) { setupOscSender(); }));
+		listenerHolder.push(oscPort.newListener([&](int& port) { setupOscSender(); }));
+		listenerHolder.push(bDetectBlob.newListener([&](bool& b) { setupBS(); }));
+		listenerHolder.push(bHeatmap.newListener([&](bool& b) { setupHeatmap(); }));
+		listenerHolder.push(bGlitch.newListener([&](bool& b) { setupGlitch(); }));
+	}
+
 	void setupAll() {
 		setupBS();
 		setupHeatmap();
@@ -62,7 +81,7 @@ public:
 			}
 			std::string nameBlob = prm.getName() + "-Blob";
 
-			senderBlob.setup(nameBlob, inputWidth, inputHeight, ndiOut);
+			senderBlob.setup(nameBlob, processWidth, processHeight, ndiOut);
 		}
 		else {
 			senderBlob.clear();
@@ -72,9 +91,9 @@ public:
     void setupHeatmap(){
 		if (bHeatmap) {
 			heatmap.clear();
-			heatmap.setup(inputWidth, inputHeight);
+			heatmap.setup(processWidth, processHeight);
 			std::string nameHeat = prm.getName() + "-Heatmap";
-			senderHeatmap.setup(nameHeat, inputWidth, inputHeight, ndiOut);
+			senderHeatmap.setup(nameHeat, processWidth, processHeight, ndiOut);
 		}
 		else {
 			senderHeatmap.clear();
@@ -83,15 +102,15 @@ public:
     
     void setupGlitch(){
 		if (bGlitch) {
-			glitch.allocate(inputWidth, inputHeight);
+			glitch.allocate(processWidth, processHeight);
 
-			combinedFbo.allocate(inputWidth, inputHeight, GL_RGBA);
+			combinedFbo.allocate(processWidth, processHeight, GL_RGBA);
 			combinedFbo.begin();
 			ofClear(255, 255, 255, 0);
 			combinedFbo.end();
 
 			std::string nameGlitch = prm.getName() + "-Glitch";
-			senderGlitch.setup(nameGlitch, inputWidth, inputHeight, ndiOut);
+			senderGlitch.setup(nameGlitch, processWidth, processHeight, ndiOut);
 		}
 		else {
 			senderGlitch.clear();
@@ -126,7 +145,7 @@ public:
 		if (bHeatmap) {
 			if (ofGetFrameNum() % (30 * 60 * 3) == (30 * 60 * 3)-1) {
 				heatmap.clear();
-				heatmap.setup(inputWidth, inputHeight);
+				heatmap.setup(processWidth, processHeight);
 				cout << "clear heatmap" << endl;
 			}
 		}
@@ -196,8 +215,6 @@ public:
     void drawFbo(){
 		if (!ndiIn) return;
 
-        float camWidth = finalImage.getWidth();
-        float camHeight = finalImage.getHeight();
         int nBlobs = contourFinder.blobs.size();
         int okBlobNum = 0;
         
@@ -205,7 +222,9 @@ public:
         if(bDetectBlob){
             senderBlob.begin();
 			ofPushMatrix();
-			ofScale(blobScale);
+			float sx = (float)processWidth / receiver.getWidth();
+			float sy = (float)processHeight / receiver.getHeight();
+			ofScale(sx, sy);
 
 			for(int i=0; i<nBlobs; i++){
                 int label = tracker.getCurrentLabels()[i];
@@ -217,7 +236,7 @@ public:
                 if(minAge <= age){
                     
                     glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
-                    float area = blob.area / (camWidth*camHeight);
+                    float area = blob.area / (processWidth*processHeight);
                     
                     ofSetLineWidth(1);
                     ofNoFill();
@@ -232,14 +251,14 @@ public:
                     ofxOscMessage m;
                     m.setAddress(oscAddress.get() + "/" + ofToString(getOscAddressSlot(label)) +"/val");
                     m.addIntArg(label);
-                    m.addFloatArg(center.x/camWidth);
-                    m.addFloatArg(center.y/camHeight);
+                    m.addFloatArg(center.x/processWidth);
+                    m.addFloatArg(center.y/processHeight);
                     m.addFloatArg(glm::length(velocity));
                     m.addFloatArg(area);
                     m.addIntArg(age);
                     
                     // polar coordinate
-                    glm::vec2 p = toPolar(center.x, center.y, camWidth, camHeight);
+                    glm::vec2 p = toPolar(center.x, center.y, processWidth, processHeight);
                     m.addFloatArg(p.x);
                     m.addFloatArg(p.y);
 
@@ -249,8 +268,8 @@ public:
                     
                     // Effects
 					if (bHeatmap) {
-						float min = heatSizeMin * camWidth * 0.01;
-						float max = heatSizeMax * camWidth * 0.01;
+						float min = heatSizeMin * processWidth * 0.01;
+						float max = heatSizeMax * processWidth * 0.01;
 						float heatRadius = ofMap(area, 0, 1, min, max, true);
 						heatmap.setRadius(heatRadius);
 						heatmap.addPoint(center.x, center.y);
@@ -328,8 +347,8 @@ public:
         if(!ndiIn) return;
         
         if(receiver.isConnected()){
-            int w = inputWidth;
-            int h = inputHeight;
+            int w = processWidth;
+            int h = processHeight;
             ofRectangle v = ofRectangle(0,0,w,h);
             v.scaleTo(ofGetCurrentViewport());
 			ofPushStyle();
@@ -354,7 +373,7 @@ public:
 			int h = (ofGetHeight() - 200) / nMon - 10;
             int w = h * 1920/1080;
             
-            int ty = 25;
+            int ty = 28;
             ofPushStyle();
             ofSetColor(255);
             
@@ -411,8 +430,12 @@ public:
         }
         
         // name of NDI
-        receiver.isConnected() ? ofSetHexColor(0x00ffff) : ofSetHexColor(0xff0000);
-        ofDrawBitmapString(NDI_name, 0, 10);
+        receiver.isConnected() ? ofSetHexColor(0x0000ff) : ofSetHexColor(0xff0000);
+
+		stringstream ss;
+		ss << longName << "\n";
+		ss << receiver.getWidth() << "x" << receiver.getHeight();		
+		ofDrawBitmapString(ss.str(), 0, 10);
     }
     
     bool getIsNDIConected(){
@@ -435,16 +458,8 @@ public:
 		return nMonitor;
 	}
 
-	void connect() {
-		receiver.connect(NDI_name, ndiInHighestBandwidth);
-	}
 
-	void disconnect() {
-		receiver.disconnect();
-	}
-
-    //
-    int inputWidth, inputHeight;
+	string longName = "";
 
     ofxCvColorImage currentImage;
     ofxCvGrayscaleImage finalImage;
@@ -477,9 +492,12 @@ public:
     ofParameter<string> NDI_name{"Name", "sender1"};
     ofParameter<bool> ndiIn{"NDI IN",false};
     ofParameter<bool> ndiOut{"NDI OUT", false};
-	ofParameter<bool> ndiInHighestBandwidth{ "NDI In Highest Bandwidth", false };
+	/*ofParameter<bool> ndiInHighestBandwidth{ "NDI In Highest Bandwidth", false };*/
+	ofParameter<int> processWidth{ "Process Width", 1280, 240, 1920};
+	ofParameter<int> processHeight{ "Process Height", 720, 135, 1080};
+	ofParameterGroup generalGrp{ "NDI in/out", NDI_name, ndiIn, ndiOut, /*ndiInHighestBandwidth,*/ processWidth, processHeight };
 
-    // cv::BackgroundSubtractor
+	// cv::BackgroundSubtractor
     cv::Ptr<cv::BackgroundSubtractor> pBackSub;
     cv::Mat currentMat, foregroundMat;
     
@@ -496,8 +514,8 @@ public:
     ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
     ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
     ofParameter<int> minAge{ "Min age", 10, 0, 60 };
-	ofParameter<float> blobScale{ "scale", 1, 0.1, 4.0 };
-    ofParameterGroup trackerGrp{ "Tracker", minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, maxBlobNum, minAge, blobScale };
+	//ofParameter<float> blobScale{ "scale", 1, 0.1, 4.0 };
+    ofParameterGroup trackerGrp{ "Tracker", minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, maxBlobNum, minAge, /*blobScale */};
     
     // OSC sender settings
     ofParameter<string> oscIp{"IP", "localhost"};
@@ -520,7 +538,7 @@ public:
     ofParameter<bool> bGlitch{"Glitch", true};
     ofParameterGroup layerGrp{"Layer", bDetectBlob, bHeatmap, bGlitch};
     
-    ofParameterGroup prm{"NDI source", NDI_name, ndiIn, ndiInHighestBandwidth, ndiOut, bgGrp, trackerGrp, oscGrp, heatmapGrp, layerGrp};
+    ofParameterGroup prm{"NDI source", generalGrp, bgGrp, trackerGrp, oscGrp, heatmapGrp, layerGrp};
     
     ofEventListeners listenerHolder;
 };
