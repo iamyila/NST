@@ -37,14 +37,7 @@ void ofApp::setup(){
 }
 
 void ofApp::connectNDI(){
-    
-    ofLogNotice() << "Listing existing NDI sources.." << endl;
-    auto sources = ofxNDI::listSources();
-    ofLogNotice() << "Found " << sources.size() << " sources"<< endl;
-    for(auto & s : sources){
-        ofLogNotice() << s.p_ndi_name;
-    }
-    
+      
     for (int i=0; i <ndis.size(); i++){
 		ndis[i]->connect();
     }    

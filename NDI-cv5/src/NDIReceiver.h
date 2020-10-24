@@ -33,13 +33,19 @@ public:
 		}
 
 		auto sources = ofxNDI::listSources();
-		cout << "Looking for NDI source : " << name;
+		cout << "Listing existing NDI sources..\n\n";
+		cout << "Found " << sources.size() << " sources" << "\n";
+		for (auto& s : sources) {
+			cout << s.p_ndi_name << "\n";
+		}
+
+		cout << "\n";
+		cout << "Try to connect to " << name << " ...";
 
 		bool found = false;
 		for (auto& s : sources) {
 			found = ofIsStringInString(s.p_ndi_name, name) || ofIsStringInString(s.p_url_address, name);
-			cout << ".";
-
+			
 			if (found) {
 				ofxNDIReceiver::Settings settings;
 				settings.bandwidth = highestBandwidth
@@ -48,14 +54,16 @@ public:
 				bool ok = receiver.setup(s, settings);
 				
 				if (ok) {
-					cout << "OK! connected with " 
+					cout << " OK!" << '\n';
+					cout << "Connected with " 
 						 << (highestBandwidth ? "Highest" : "Lowest") 
-						 << " Bandwidth" << endl;					
+						 << " Bandwidth" << '\n';					
 					video.setup(receiver);
 					break;
 				};
 			}
 		}
+		cout << endl;
 		if (!found) {
 			cout << " Not found" << endl;
 		}
@@ -87,14 +95,6 @@ public:
 
 	ofPixels& getPixels() {
 		return pixels;
-	}
-
-	void draw(int x, int y) {
-		//fbo.draw(x, y, fbo.getWidth(), fbo.getHeight());
-	}
-
-	void draw(int x, int y, int w, int h) {
-		//fbo.draw(x, y, w, h);
 	}
 
 	void disconnect() {
