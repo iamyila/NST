@@ -24,7 +24,7 @@ public:
     mtb::AppParam appPrm;
 
     ofParameter<void> connectNDIBtn{"Connect NDI"};
-    ofParameter<int> soloMode{"Solo", 0, 0, 10};
+    ofParameter<bool> soloMode{"Solo", false};
     ofEventListeners listenerHolder;
 
     // this is for receiving Re-consttuctor OSC

@@ -88,7 +88,7 @@ void ofApp::receiveOsc(){
 
 void ofApp::draw(){
     
-    if(soloMode == 0){
+    if(!soloMode){
         ofPushMatrix();
         ofTranslate(220, 20);
         ofSetColor(255);
@@ -114,13 +114,10 @@ void ofApp::draw(){
         }
 
     }else{
-        int ndiCh = soloMode-1;
-        if(0<=ndiCh && ndiCh<ndis.size()){
-            auto ndi = ndis[ndiCh];
-            ofPushMatrix();
-            ndi->drawSolo();
-            ofPopMatrix();
-        }
+        auto ndi = ndis[0];
+        ofPushMatrix();
+        ndi->drawSolo();
+        ofPopMatrix();
     }
     
     for (int i=0; i<ndis.size(); i++){
@@ -146,11 +143,12 @@ void ofApp::keyPressed(int key){
             break;
 
         case 'c':
-            connectNDI();
+		case ' ':
+			connectNDI();
             break;
         
         case 's':
-            ndis[0]->heatmap.save();
+			soloMode = !soloMode;
             break;
             
         case 'g':
