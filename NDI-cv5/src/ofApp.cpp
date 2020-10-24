@@ -46,32 +46,8 @@ void ofApp::connectNDI(){
     }
     
     for (int i=0; i <ndis.size(); i++){
-        shared_ptr<NDIsource> ndi = ndis[i];
-        if (!ndi->ndiIn) continue;
-        
-        string name_or_url = ndi->NDI_name;
-        if(name_or_url == "") continue;
-        
-        cout << "Looking for NDI source named : " << name_or_url;
-        
-        bool found = false;
-        for(auto & s : sources){
-            found = ofIsStringInString(s.p_ndi_name, name_or_url) || ofIsStringInString(s.p_url_address, name_or_url);
-            cout << ".";
-            
-            if(found){
-                ndi->receiver.setup(s);
-                cout << " ok!" << endl;
-                ndi->video.setup(ndi->receiver);
-                break;
-            }
-        }
-        
-        if(!found) cout << " Not found" << endl;
-        //ndi->receiver.setup();
-    }
-    
-    cout << endl;
+		ndis[i]->connect();
+    }    
 }
 
 void ofApp::update(){

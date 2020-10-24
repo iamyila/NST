@@ -16,10 +16,10 @@
 #include "ofxGui.h"
 #include "ofxEasyFboGlitch.h"
 #include "ofxHeatMap.h"
-#include "NDISender.h"  // my own helper class
+#include "NDISender.h"		// my own helper class
+#include "NDIReceiver.h"	// my own helper class
 
 using std::string;
-
 
 class NDIsource{
     
@@ -31,7 +31,6 @@ public:
         inputWidth = w;
         inputHeight = h;
         currentImage.allocate(w,h);
-        currentImageFixed.allocate(w,h);
         finalImage.allocate(w,h);
 
         setupAll();
@@ -104,40 +103,25 @@ public:
     
     void update(){
 
-        if(receiver.isConnected()){
-            video.update();
-        
-            if(video.isFrameNew()) {
-                auto & frame = video.getFrame();
-                int xres = frame.xres;
-                int yres = frame.yres;
-                    
-                if(xres != 0 && yres != 0 ){
-                        video.decodeTo(pixels);
-                        pixels.setImageType(OF_IMAGE_COLOR);
-						currentImage.setFromPixels(pixels);
+		if (receiver.update()) {
+			ofPixels& pix = receiver.getPixels();
+			pix.setImageType(OF_IMAGE_COLOR);
+			currentImage.setFromPixels(pix);
+			currentMat = ofxCv::toCv(currentImage);
+			if (bDetectBlob) {
+				pBackSub->apply(currentMat, foregroundMat);
 
-                        //currentImage.scaleIntoMe(currentImageFixed);
-                        currentMat = ofxCv::toCv(currentImage);
-                    if(bDetectBlob){
-                        pBackSub->apply(currentMat, foregroundMat);
-                            
-                        ofPixels pix;
-                        ofxCv::toOf(foregroundMat, pix);
-                        finalImage.setFromPixels(pix);
-                            
-                        findContour();
-                            
-                        sendNoteOnOff();
-                    }                                       
-                        
-                    drawFbo();
-                }
-            }
-        }
+				ofPixels pix;
+				ofxCv::toOf(foregroundMat, pix);
+				finalImage.setFromPixels(pix);
+				findContour();
+				sendNoteOnOff();
+			}
+
+			drawFbo();
+		}
 
 		// ofxHeatmap increase memory use, so we reset every 3 min.
-
 		if (bHeatmap) {
 			if (ofGetFrameNum() % (30 * 60 * 3) == (30 * 60 * 3)-1) {
 				heatmap.clear();
@@ -450,24 +434,28 @@ public:
 		return nMonitor;
 	}
 
+	void connect() {
+		receiver.connect(NDI_name);
+	}
+
+	void disconnect() {
+		receiver.disconnect();
+	}
+
     //
     int inputWidth, inputHeight;
-    
-    // receive
-    ofxNDIReceiver receiver;
-    ofxNDIRecvVideoFrameSync video;
-	//ofxNDIRecvVideoThreading video;
 
-	ofPixels pixels;
     ofxCvColorImage currentImage;
-    ofxCvColorImage currentImageFixed;
     ofxCvGrayscaleImage finalImage;
     ofxCvContourFinder contourFinder;
     
     ofxCv::RectTracker tracker;
     std::vector<cv::Rect> rects;
     std::map<int, bool> detectedBlobs; // label, noteOnSent
-    
+
+	// NDI receive
+	NDIReceiver receiver;
+
     // NID send
     NDISender senderBlob;
     NDISender senderHeatmap;
