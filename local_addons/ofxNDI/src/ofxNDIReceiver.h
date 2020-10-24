@@ -46,6 +46,7 @@ public:
 	NDIlib_recv_instance_t getInstance() const { return instance_; }
 	NDIlib_framesync_instance_t createFrameSync();
 	NDIlib_framesync_instance_t getFrameSync() const { return frame_sync_; }
+	void destroy();
 private:
 	NDIlib_recv_instance_t instance_=nullptr;
 	NDIlib_framesync_instance_t frame_sync_=nullptr;

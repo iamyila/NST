@@ -15,7 +15,12 @@ bool ofxNDIReceiver::setup(size_t index, const Settings &settings)
 }
 bool ofxNDIReceiver::setup(const ofxNDI::Source &source, const Settings &settings)
 {
-	NDIlib_recv_create_v3_t creator = { source, settings.color_format, settings.bandwidth, settings.deinterlace, nullptr };
+	NDIlib_recv_create_v3_t creator = { 
+		source, 
+		settings.color_format, 
+		settings.bandwidth, 
+		settings.deinterlace, 
+		nullptr };
 	creator.p_ndi_recv_name = settings.name==""?nullptr:settings.name.c_str();
 	instance_ = NDIlib_recv_create_v3(&creator);
 
@@ -108,4 +113,9 @@ ofxNDIReceiver::~Receiver()
 	if(frame_sync_) NDIlib_framesync_destroy(frame_sync_);
 	if(instance_) NDIlib_recv_destroy(instance_);
 	NDIlib_destroy();
+}
+
+void ofxNDIReceiver::destroy() {
+	if (frame_sync_) NDIlib_framesync_destroy(frame_sync_);
+	if (instance_) NDIlib_recv_destroy(instance_);
 }
