@@ -170,7 +170,21 @@ unsigned char* heatmap_render_saturated_to(const heatmap_t* h, const heatmap_col
 
             /* Just copy over the color from the colorscheme. */
             memcpy(colorline, colorscheme->colors + idx*4, 4);
-            colorline += 4;
+            
+
+			// gradually reduce
+			if (*bufline > 0.1) {
+				*bufline = *bufline- 0.1;
+			}
+			else {
+				*bufline = 0;
+			}
+
+			if (*bufline < 2) {
+				*(colorline + 3) = *bufline*0.5;
+			}
+
+			colorline += 4;
         }
     }
 
