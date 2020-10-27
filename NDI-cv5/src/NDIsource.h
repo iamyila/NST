@@ -139,16 +139,6 @@ public:
 
 			drawFbo();
 		}
-
-		// ofxHeatmap increase memory use, so we reset every 10 min.
-		if (bHeatmap) {
-			int resetFrame = ofGetTargetFrameRate() / 2 * 60 * 10;
-			if ( (ofGetFrameNum() % resetFrame) == (resetFrame-1)) {
-				heatmap.clear();
-				heatmap.setup(processWidth, processHeight);
-				cout << "clear heatmap" << endl;
-			}
-		}
     }       
   
     void findContour(){
