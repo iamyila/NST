@@ -48,6 +48,7 @@ namespace mtb{
             pBackSub->apply(currentMat, foregroundMat);
             ofxCv::toOf(foregroundMat, foregroundPix);
             foregroundImage.setFromPixels(foregroundPix);
+            if(0<blurAmt) foregroundImage.blur(blurAmt);
             findContour();
         }
         
@@ -55,6 +56,7 @@ namespace mtb{
             if(!foregroundImage.bAllocated) return;
             
             int numCandidates = 30;
+            
             contourFinder.findContours(foregroundImage, minArea*minArea, maxArea*maxArea, numCandidates, bFindHoles, bSimplify);
             
             rects.clear();
@@ -80,33 +82,47 @@ namespace mtb{
             vector<unsigned int> currentLabels = tracker.getCurrentLabels();
             std::sort(currentLabels.begin(), currentLabels.end(), byLable());
             
-            auto itr = currentLabels.rbegin();
+
+            int selected = 0;
             
-            //cout << currentLabels.size() << " : ";
-            int i=0;
-            for(; itr!=currentLabels.rend(); ++itr){
+            auto itr = currentLabels.begin();
+            // 1. try to find already selected blob
+            for(; itr!=currentLabels.end(); ++itr){
                 int label = *itr;
-                //cout << label << ", ";
-                if(selectedBlobs.count(label) == 0){
-                    // this blob is not selected, lets add
-                    selectedBlobs.emplace(make_pair(label, false));
-                }else{
-                    // this blob is already selected, do nothing
+                if(selectedBlobs.count(label) == 1){
+                    selected++;
                 }
-                
-                // check if this blob need NoteOn message
-                if(selectedBlobs[label] == false){
-                    int age = tracker.getAge(label);
-                    if(minAge <= age){
-                        selectedBlobs[label] = true;
-                        // send OSC
+            }
+
+            // 2. need to add extra
+            if(selected < maxBlobNum){
+                int needToAdd = maxBlobNum - selected;
+                for(int i=0; i<needToAdd; i++){
+                    if(currentLabels.size()>i){
+                        int label = currentLabels[i];
+                        int age = tracker.getAge(label);
+                        selectedBlobs.emplace(make_pair(label,false));
                     }
                 }
-                
-                i++;
-                if(selectedBlobs.size()>=maxBlobNum) break;
-            } //cout << endl;
-
+            }
+            
+            // 3. check if we need NoteOn
+            {
+                auto itr = selectedBlobs.begin();
+                for(; itr!=selectedBlobs.end(); ++itr){
+                    int label = itr->first;
+                    bool bOn = itr->second;
+                    
+                    if(bOn == false){
+                        int age = tracker.getAge(label);
+                        if(minAge <= age){
+                            itr->second = true;
+                        }
+                    }
+                }
+            }
+            
+            
             // delete overflow
 //            auto itr = selectedBlobs.rbegin();
 //            itr += maxBlobNum;
@@ -114,7 +130,40 @@ namespace mtb{
 //            selectedBlobs.
         }
     
+        void drawToFbo2(float receiverW, float receiverH, float processW, float processH){
+            
+            senderBlob.begin();
+            
+            float sx = (float)processW / receiverW;
+            float sy = (float)processH / receiverH;
+            ofPushMatrix();
+            ofScale(sx, sy);
+            
+            int nBlobs = contourFinder.blobs.size();
+            for(int i=0; i<nBlobs; i++){
+                
+                int label = tracker.getCurrentLabels()[i];
+                int age = tracker.getAge(label);
+                ofxCvBlob & blob = contourFinder.blobs[i];
+                ofRectangle & rect = blob.boundingRect;
+                glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
+                
+                ofPushStyle();
+                ofPushMatrix();
+                ofTranslate(center);
+                ofSetColor(255);
+                ofNoFill();
+                ofSetRectMode(OF_RECTMODE_CENTER);
+                ofDrawRectangle(0, 0, rect.width, rect.height);
+                ofDrawBitmapString(ofToString(label), 0, 0);
+                ofPopMatrix();
+                ofPopStyle();
+            }
         
+            ofPopMatrix();
+            senderBlob.end();
+        }
+
         void drawToFbo(float receiverW, float receiverH, float processW, float processH){
             
             senderBlob.begin();
@@ -124,11 +173,11 @@ namespace mtb{
             ofPushMatrix();
             ofScale(sx, sy);
             
-            int nB = 0;
             auto itr = selectedBlobs.begin();
             for(; itr!=selectedBlobs.end(); ++itr){
                 
                 int label = itr->first;
+                bool bNoteOnSent = itr->second;
                 int age = tracker.getAge(label);
                 int index = tracker.getIndexFromLabel(label);
                 ofxCvBlob & blob = contourFinder.blobs[index];
@@ -136,20 +185,24 @@ namespace mtb{
                 glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
                 glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(index));
                 float area = blob.area / (receiverW*receiverH);
-                
-                ofSetLineWidth(1);
-                ofNoFill();
-                {
-                    ofPushMatrix();
+
+                ofPushStyle();
+                ofPushMatrix();
+                if(bNoteOnSent){
+                    ofSetLineWidth(1);
                     ofNoFill();
                     blob.draw();
-                    ofPopMatrix();
+                    ofDrawBitmapString(ofToString(label), center.x, center.y);
+                }else{
+                    ofTranslate(center);
+                    ofSetColor(255, 200);
+                    ofNoFill();
+                    ofSetRectMode(OF_RECTMODE_CENTER);
+                    ofDrawRectangle(0, 0, rect.width, rect.height);
+                    ofDrawBitmapString(ofToString(label), 0, 0);
                 }
-                
-                nB++;
-                if(maxBlobNum<=nB){
-                    break;
-                }
+                ofPopMatrix();
+                ofPopStyle();
             }
             ofPopMatrix();
             senderBlob.end();
@@ -167,9 +220,23 @@ namespace mtb{
                 sprintf(c, "%5i %5i", label, age); //, getOscAddressSlot(label));
                 ofDrawBitmapString(c, 0, (i+1)*15);
                 i++;
-                if(maxBlobNum<=i){
-                    break;
-                }
+                //if(maxBlobNum<=i){
+                //    break;
+                //}
+            }
+        }
+        
+        void drawInfo2(){
+            const vector<unsigned int> & currentLabels = tracker.getCurrentLabels();
+            auto itr = currentLabels.begin();
+            char c[255];
+            int i = 0;
+            for(; itr!=currentLabels.end(); itr++){
+                int label = *itr;
+                int age = tracker.getAge(label);
+                sprintf(c, "%5i %5i", label, age);
+                ofDrawBitmapString(c, 0, (i+1)*15);
+                i++;
             }
         }
         
@@ -203,19 +270,20 @@ namespace mtb{
         cv::Mat currentMat, foregroundMat;
         
         ofParameter<int> bgAlgo{"Background Subtractor Algo", 1, 0, 1};
-        
+        ofParameter<float> blurAmt{ "Blur amount", 3, 1, 20 };
+
         // CV::Contor, CV::Tracker
-        ofParameter<float> minArea{ "minArea", 5, 0, 100 };
-        ofParameter<float> maxArea{ "maxArea", 10, 0, 300 };
+        ofParameter<float> minArea{ "minArea", 5, 0, 500 };
+        ofParameter<float> maxArea{ "maxArea", 10, 0, 500 };
         ofParameter<bool> bFindHoles{ "find holes", false };
         ofParameter<bool> bSimplify{ "simplify", false };
         ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
-        ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 300 };
+        ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 500 };
         ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
         ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
         ofParameter<int> minAge{ "Min age", 10, 0, 60 };
         //ofParameter<float> blobScale{ "scale", 1, 0.1, 4.0 };
-        ofParameterGroup grp{ "Tracker", bgAlgo, minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, maxBlobNum, minAge, /*blobScale */};
+        ofParameterGroup grp{ "Tracker", bgAlgo, blurAmt, minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, maxBlobNum, minAge, /*blobScale */};
 
         
         NDISender senderBlob;

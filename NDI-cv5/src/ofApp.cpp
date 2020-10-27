@@ -101,7 +101,7 @@ void ofApp::draw(){
             ofPopMatrix();
 
 			int nMon = ndis[i]->getNumMonitor();
-			int h = (ofGetHeight() - 200) / nMon - 10;
+			int h = (ofGetHeight() - 150) / nMon - 10;
 			int w = h * 1920 / 1080;
 			xpos += (w + 10);
         }

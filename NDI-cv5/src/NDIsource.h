@@ -167,7 +167,7 @@ public:
         if(bDetectBlob){
             float rw = receiver.getWidth();
             float rh = receiver.getHeight();
-            tracker.drawToFbo(rw, rh, processWidth, processHeight);
+            tracker.drawToFbo2(rw, rh, processWidth, processHeight);
             
             /*
              int nBlobs = contourFinder.blobs.size();
@@ -294,7 +294,7 @@ public:
             ofSetColor(255);
             ofSetRectMode(OF_RECTMODE_CENTER);
 			currentImage.draw(ofGetWidth() / 2, ofGetHeight() / 2, v.width, v.height);
-			//tracker.senderBlob.draw(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
+			tracker.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
             heatmap.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
             ofSetRectMode(OF_RECTMODE_CORNER);
 			ofPopStyle();
@@ -308,7 +308,7 @@ public:
         if(receiver.isConnected()){
             
 			int nMon = getNumMonitor();
-			int h = (ofGetHeight() - 200) / nMon - 10;
+			int h = (ofGetHeight() - 150) / nMon - 10;
             int w = h * 1920/1080;
             
             int ty = 28;
@@ -347,16 +347,20 @@ public:
             }
             
             // 7 info text
-            ty += h+10+10;
             ofPushMatrix();
-            ofTranslate(0, ty);
+            ofTranslate(w+10, 28);
             ofSetColor(255);
-            ofDrawBitmapString("label   age   OscAdrsSlot", 0, -5);
-
-            
+            ofDrawBitmapString("label   age", 0, -5);
             tracker.drawInfo();
-            
             ofPopMatrix();
+            
+            ofPushMatrix();
+            ofTranslate(w+110, 28);
+            ofSetColor(255);
+            ofDrawBitmapString("label   age", 0, -5);
+            tracker.drawInfo2();
+            ofPopMatrix();
+
             ofPopStyle();
         }
         
