@@ -35,8 +35,8 @@ public:
 		currentImage.clear();
         currentImage.allocate(w,h);
 
-		finalImage.clear();
-		finalImage.allocate(w,h);
+		foregroundImage.clear();
+		foregroundImage.allocate(w,h);
 
         setupAll();
     }    
@@ -131,9 +131,8 @@ public:
 			if (bDetectBlob) {
 				pBackSub->apply(currentMat, foregroundMat);
 
-				ofPixels pix;
-				ofxCv::toOf(foregroundMat, pix);
-				finalImage.setFromPixels(pix);
+				ofxCv::toOf(foregroundMat, foregroundPix);
+				foregroundImage.setFromPixels(foregroundPix);
 				findContour();
 				sendNoteOnOff();
 			}
@@ -383,12 +382,14 @@ public:
 
             if(bDetectBlob){
                 // 2
-                //ty += h+10;
-                //ofxCv::drawMat(foregroundMat,0, ty,w,h);
-
-                // 3
                 ty += h+10;
+                foregroundImage.draw(0, ty, w, h);
+
+                // 2+
+                ofPushStyle();
+                ofEnableAlphaBlending();
                 senderBlob.draw(0, ty, w, h);
+                ofPopStyle();
             }
     
             if(bHeatmap){
@@ -463,7 +464,8 @@ public:
 	string longName = "";
 
     ofxCvColorImage currentImage;
-    ofxCvGrayscaleImage finalImage;
+    ofPixels foregroundPix;
+    ofxCvGrayscaleImage foregroundImage;
     ofxCvContourFinder contourFinder;
     
     ofxCv::RectTracker tracker;
