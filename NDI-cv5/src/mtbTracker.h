@@ -49,7 +49,6 @@ namespace mtb{
             ofxCv::toOf(foregroundMat, foregroundPix);
             foregroundImage.setFromPixels(foregroundPix);
             findContour();
-            sendNoteOnOff();
         }
         
         void findContour(){
@@ -71,8 +70,9 @@ namespace mtb{
             const vector<unsigned int> deadLabels = tracker.getDeadLabels();
             for(int i=0; i<deadLabels.size(); i++){
                 int label = deadLabels[i];
-                if(selectedLabels.count(label) != 0){
+                if(selectedBlobs.count(label) != 0){
                     // this one need NoteOff
+                    selectedBlobs.erase(label);
                 }
             }
 
@@ -80,7 +80,7 @@ namespace mtb{
             vector<unsigned int> currentLabels = tracker.getCurrentLabels();
             std::sort(currentLabels.begin(), currentLabels.end(), byLable());
             
-            auto & itr = currentLabels.rbegin();
+            auto itr = currentLabels.rbegin();
             
             //cout << currentLabels.size() << " : ";
             int i=0;
@@ -95,30 +95,90 @@ namespace mtb{
                 }
                 
                 // check if this blob need NoteOn message
-                //
                 if(selectedBlobs[label] == false){
-                    //int age = ...
-                    // if(minAge < age){
-                    // send OSC
+                    int age = tracker.getAge(label);
+                    if(minAge <= age){
+                        selectedBlobs[label] = true;
+                        // send OSC
+                    }
                 }
                 
                 i++;
-                if(i>=maxBlobNum) break;
+                if(selectedBlobs.size()>=maxBlobNum) break;
             } //cout << endl;
+
+            // delete overflow
+//            auto itr = selectedBlobs.rbegin();
+//            itr += maxBlobNum;
+//            selectedBlobs.erase(itr, selectedBlobs.rend());
+//            selectedBlobs.
         }
+    
         
-        void sendNoteOnOff(){
+        void drawToFbo(float receiverW, float receiverH, float processW, float processH){
             
-        }
-        
-        void draw(){
+            senderBlob.begin();
+
+            float sx = (float)processW / receiverW;
+            float sy = (float)processH / receiverH;
+            ofPushMatrix();
+            ofScale(sx, sy);
             
-            auto & itr = selectedBlobs.begin();
+            int nB = 0;
+            auto itr = selectedBlobs.begin();
             for(; itr!=selectedBlobs.end(); ++itr){
-             
-                // draw
                 
+                int label = itr->first;
+                int age = tracker.getAge(label);
+                int index = tracker.getIndexFromLabel(label);
+                ofxCvBlob & blob = contourFinder.blobs[index];
+                ofRectangle & rect = blob.boundingRect;
+                glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
+                glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(index));
+                float area = blob.area / (receiverW*receiverH);
+                
+                ofSetLineWidth(1);
+                ofNoFill();
+                {
+                    ofPushMatrix();
+                    ofNoFill();
+                    blob.draw();
+                    ofPopMatrix();
+                }
+                
+                nB++;
+                if(maxBlobNum<=nB){
+                    break;
+                }
             }
+            ofPopMatrix();
+            senderBlob.end();
+        }
+        
+        void drawInfo(){
+            char c[255];
+            int i = 0;
+            auto itr = selectedBlobs.begin();
+            for(; itr!=selectedBlobs.end(); itr++){
+                int label = (*itr).first;
+                bool bNoteOnSent = (*itr).second;
+                int age = tracker.getAge(label);
+                bNoteOnSent ? ofSetHexColor(0xff0099) : ofSetColor(220);
+                sprintf(c, "%5i %5i", label, age); //, getOscAddressSlot(label));
+                ofDrawBitmapString(c, 0, (i+1)*15);
+                i++;
+                if(maxBlobNum<=i){
+                    break;
+                }
+            }
+        }
+        
+        void drawForeground(int x, int y, int w, int h){
+            foregroundImage.draw(x, y, w, h);
+        }
+        
+        void drawFbo(int x, int y, int w, int h){
+            senderBlob.draw(x, y, w, h);
         }
         
         void clear(){
@@ -126,7 +186,7 @@ namespace mtb{
         }
         
         void send(){
-            
+            senderBlob.send();
         }
         
         ofPixels foregroundPix;

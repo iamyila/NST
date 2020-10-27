@@ -165,6 +165,10 @@ public:
         
         // FBO for Blob
         if(bDetectBlob){
+            float rw = receiver.getWidth();
+            float rh = receiver.getHeight();
+            tracker.drawToFbo(rw, rh, processWidth, processHeight);
+            
             /*
              int nBlobs = contourFinder.blobs.size();
              int okBlobNum = 0;
@@ -252,7 +256,7 @@ public:
             int w = glitch.targetFbo.getWidth();
             int h = glitch.targetFbo.getHeight();
             currentImage.draw(0,0,w,h);
-            //if(bDetectBlob) tracker.draw(0,0,w,h);
+            if(bDetectBlob) tracker.drawFbo(0,0,w,h);
             if(bHeatmap) heatmap.drawFbo(0,0,w,h);
             glitch.endTarget();
             glitch.drawToFbo(w, h);
@@ -317,12 +321,12 @@ public:
             if(bDetectBlob){
                 // 2
                 ty += h+10;
-                //foregroundImage.draw(0, ty, w, h);
+                tracker.drawForeground(0, ty, w, h);
 
                 // 2+
                 ofPushStyle();
                 ofEnableAlphaBlending();
-                //senderBlob.draw(0, ty, w, h);
+                tracker.drawFbo(0, ty, w, h);
                 ofPopStyle();
             }
     
@@ -348,21 +352,10 @@ public:
             ofTranslate(0, ty);
             ofSetColor(255);
             ofDrawBitmapString("label   age   OscAdrsSlot", 0, -5);
-            char c[255];
+
             
-            /*
-            int i = 0;
-            map<int, bool>::iterator itr = detectedBlobs.begin();
-            for(; itr!=detectedBlobs.end(); itr++){
-                int label = (*itr).first;
-                bool bNoteOnSent = (*itr).second;
-                int age = tracker.getAge(label);
-                bNoteOnSent ? ofSetHexColor(0xff0099) : ofSetColor(220);
-                sprintf(c, "%5i %5i  %2i", label, age, getOscAddressSlot(label));
-                ofDrawBitmapString(c, 0, (i+1)*15);
-                i++;
-            }
-             */
+            tracker.drawInfo();
+            
             ofPopMatrix();
             ofPopStyle();
         }
