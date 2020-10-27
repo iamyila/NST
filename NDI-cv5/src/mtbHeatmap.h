@@ -10,19 +10,15 @@
 
 namespace mtb{
     
-    class HeatmapNDI{
+    class mtbHeatmap{
         
     public:
-        
-        HeatmapNDI(){
-        }
         
         void setup(string name, int w, int h, bool ndiOut){
             width = w;
             height = h;
             heatmap.setup(width, height);
-            std::string nameHeat = name + "-Heatmap";
-            senderHeatmap.setup(nameHeat, width, height, ndiOut);
+            senderHeatmap.setup(name, width, height, ndiOut);
             bInit = true;
         }
         
