@@ -5,6 +5,8 @@
 #pragma once
 
 #include "ofMain.h"
+#include "ofxNDISender.h"
+#include "ofxNDISendStream.h"
 
 class NDISender{
 
