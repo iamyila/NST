@@ -24,7 +24,6 @@ void ofApp::setup(){
     }
     
     gui.loadFromFile("settings.json");
-    gui.minimizeAll();
 
     connectNDI();
     
