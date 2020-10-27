@@ -10,29 +10,37 @@
 #include "ofxCv.h"
 
 namespace mtb{
+
+    struct byLable {
+        bool operator()(const unsigned int &a, const unsigned int &b) {
+            return a < b;
+        }
+    };
+
     
-    class mtbBlobTracker{
+    class mtbTracker{
         
     public:
         
-        mtbBlobTracker(){
-            listenerHolder.push(bgAlgo.newListener([&](int& algo) { setupBS(); }));
+        mtbTracker(){
+            listenerHolder.push(bgAlgo.newListener([&](int& algo) { changeBG(); }));
         }
         
         void setup(string name, int w, int h, bool ndiOut){
-            currentImage.clear();
-            currentImage.allocate(w,h);
             
             foregroundImage.clear();
             foregroundImage.allocate(w,h);
+            senderBlob.setup(name, w, h, ndiOut);
+            changeBG();
+        }
+        
+        void changeBG(){
             if (bgAlgo == 0) {
                 pBackSub = cv::createBackgroundSubtractorMOG2();
             }
             else {
                 pBackSub = cv::createBackgroundSubtractorKNN();
             }
-            
-            senderBlob.setup(name, processWidth, processHeight, ndiOut);
         }
         
         void update(ofxCvColorImage & currentImage){
@@ -45,15 +53,80 @@ namespace mtb{
         }
         
         void findContour(){
+            if(!foregroundImage.bAllocated) return;
             
+            int numCandidates = 30;
+            contourFinder.findContours(foregroundImage, minArea*minArea, maxArea*maxArea, numCandidates, bFindHoles, bSimplify);
+            
+            rects.clear();
+            for(auto & b : contourFinder.blobs){
+                rects.push_back(ofxCv::toCv(b.boundingRect));
+            }
+            tracker.setSmoothingRate(smoothingRate);
+            tracker.setMaximumDistance(maxDistance);
+            tracker.setPersistence(persistence);
+            tracker.track(rects);
+            
+            // Erase Dead blob
+            const vector<unsigned int> deadLabels = tracker.getDeadLabels();
+            for(int i=0; i<deadLabels.size(); i++){
+                int label = deadLabels[i];
+                if(selectedLabels.count(label) != 0){
+                    // this one need NoteOff
+                }
+            }
+
+            // Sort and select
+            vector<unsigned int> currentLabels = tracker.getCurrentLabels();
+            std::sort(currentLabels.begin(), currentLabels.end(), byLable());
+            
+            auto & itr = currentLabels.rbegin();
+            
+            //cout << currentLabels.size() << " : ";
+            int i=0;
+            for(; itr!=currentLabels.rend(); ++itr){
+                int label = *itr;
+                //cout << label << ", ";
+                if(selectedBlobs.count(label) == 0){
+                    // this blob is not selected, lets add
+                    selectedBlobs.emplace(make_pair(label, false));
+                }else{
+                    // this blob is already selected, do nothing
+                }
+                
+                // check if this blob need NoteOn message
+                //
+                if(selectedBlobs[label] == false){
+                    //int age = ...
+                    // if(minAge < age){
+                    // send OSC
+                }
+                
+                i++;
+                if(i>=maxBlobNum) break;
+            } //cout << endl;
         }
         
         void sendNoteOnOff(){
             
         }
         
+        void draw(){
+            
+            auto & itr = selectedBlobs.begin();
+            for(; itr!=selectedBlobs.end(); ++itr){
+             
+                // draw
+                
+            }
+        }
+        
         void clear(){
             senderBlob.clear();
+        }
+        
+        void send(){
+            
         }
         
         ofPixels foregroundPix;
@@ -63,7 +136,7 @@ namespace mtb{
         
         ofxCv::RectTracker tracker;
         std::vector<cv::Rect> rects;
-        std::map<int, bool> detectedBlobs; // label, noteOnSent
+        std::map<int, bool> selectedBlobs; // label, noteOnSent
         
         // cv::BackgroundSubtractor
         cv::Ptr<cv::BackgroundSubtractor> pBackSub;

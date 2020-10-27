@@ -8,16 +8,12 @@
 #include "ofxNDIVideoGrabber.h"
 #include "ofxNDIReceiver.h"
 #include "ofxNDIRecvStream.h"
-#include "ofxNDISender.h"
-#include "ofxNDISendStream.h"
-#include "ofxOpenCv.h"
-#include "ofxCv.h"
 #include "ofxOsc.h"
 #include "ofxGui.h"
-#include "ofxEasyFboGlitch.h"
-#include "ofxHeatMap.h"
-#include "NDISender.h"		// my own helper class
 #include "NDIReceiver.h"	// my own helper class
+#include "mtbHeatmap.h"
+#include "mtbGlitch.h"
+#include "mtbTracker.h"
 
 using std::string;
 
@@ -32,12 +28,9 @@ public:
 
         int w = processWidth;
         int h = processHeight;
-		currentImage.clear();
+
+        currentImage.clear();
         currentImage.allocate(w,h);
-
-		foregroundImage.clear();
-		foregroundImage.allocate(w,h);
-
         setupAll();
     }    
     
@@ -54,66 +47,48 @@ public:
 	void registerCallback() {
 		listenerHolder.push(processWidth.newListener([&](int& i) { setup(); }));
 		listenerHolder.push(processHeight.newListener([&](int& i) { setup(); }));
-		//listenerHolder.push(ndiInHighestBandwidth.newListener([&](bool& b) { /*disconnect();*/  connect(); }));
 		listenerHolder.push(ndiOut.newListener([&](bool& b) { setupAll(); }));
-		listenerHolder.push(bgAlgo.newListener([&](int& algo) { setupBS(); }));
 		listenerHolder.push(oscIp.newListener([&](string& ip) { setupOscSender(); }));
 		listenerHolder.push(oscPort.newListener([&](int& port) { setupOscSender(); }));
-		listenerHolder.push(bDetectBlob.newListener([&](bool& b) { setupBS(); }));
-		listenerHolder.push(bHeatmap.newListener([&](bool& b) { setupHeatmap(); }));
+		listenerHolder.push(bDetectBlob.newListener([&](bool& b) { setupTracker(); }));
 		listenerHolder.push(bGlitch.newListener([&](bool& b) { setupGlitch(); }));
+        listenerHolder.push(bHeatmap.newListener([&](bool& b) { setupHeatmap(); }));
 	}
 
 	void setupAll() {
-		setupBS();
+		setupTracker();
 		setupHeatmap();
 		setupGlitch();
 		setupOscSender();
 	}
 
-    void setupBS(){
+    void setupTracker(){
 		if (bDetectBlob) {
-			if (bgAlgo == 0) {
-				pBackSub = cv::createBackgroundSubtractorMOG2();
-			}
-			else {
-				pBackSub = cv::createBackgroundSubtractorKNN();
-			}
 			std::string nameBlob = prm.getName() + "-Blob";
-
-			senderBlob.setup(nameBlob, processWidth, processHeight, ndiOut);
+			tracker.setup(nameBlob, processWidth, processHeight, ndiOut);
 		}
 		else {
-			senderBlob.clear();
+			tracker.clear();
 		}
     }
 
     void setupHeatmap(){
 		if (bHeatmap) {
-			heatmap.clear();
-			heatmap.setup(processWidth, processHeight);
 			std::string nameHeat = prm.getName() + "-Heatmap";
-			senderHeatmap.setup(nameHeat, processWidth, processHeight, ndiOut);
+			heatmap.setup(nameHeat, processWidth, processHeight, ndiOut);
 		}
 		else {
-			senderHeatmap.clear();
+			heatmap.clear();
 		}
 	}
     
     void setupGlitch(){
 		if (bGlitch) {
-			glitch.allocate(processWidth, processHeight);
-
-			combinedFbo.allocate(processWidth, processHeight, GL_RGBA);
-			combinedFbo.begin();
-			ofClear(255, 255, 255, 0);
-			combinedFbo.end();
-
 			std::string nameGlitch = prm.getName() + "-Glitch";
-			senderGlitch.setup(nameGlitch, processWidth, processHeight, ndiOut);
+			glitch.setup(nameGlitch, processWidth, processHeight, ndiOut);
 		}
 		else {
-			senderGlitch.clear();
+			glitch.clear();
 		}
     }
  
@@ -127,37 +102,18 @@ public:
 			ofPixels& pix = receiver.getPixels();
 			pix.setImageType(OF_IMAGE_COLOR);
 			currentImage.setFromPixels(pix);
-			currentMat = ofxCv::toCv(currentImage);
-			if (bDetectBlob) {
-				pBackSub->apply(currentMat, foregroundMat);
-
-				ofxCv::toOf(foregroundMat, foregroundPix);
-				foregroundImage.setFromPixels(foregroundPix);
-				findContour();
-				sendNoteOnOff();
+            if (bDetectBlob) {
+                tracker.update(currentImage);
 			}
 
 			drawFbo();
 		}
     }       
   
-    void findContour(){
-        // contour finder
-        if(finalImage.bAllocated){
-            contourFinder.findContours(finalImage, minArea*minArea, maxArea*maxArea, maxBlobNum, bFindHoles, bSimplify);
-            
-            rects.clear();
-            for(auto & b : contourFinder.blobs){
-                rects.push_back(ofxCv::toCv(b.boundingRect));
-            }
-            tracker.setSmoothingRate(smoothingRate);
-            tracker.setMaximumDistance(maxDistance);
-            tracker.setPersistence(persistence);
-            tracker.track(rects);
-        }
-    }
+
     
     void sendNoteOnOff(){
+        /*
         // send /on, /off osc message
         ofxOscBundle bundle;
         const vector<unsigned int>& newLabels = tracker.getNewLabels();
@@ -200,20 +156,26 @@ public:
         if(bundle.getMessageCount()>0){
             oscSender.sendBundle(bundle);
         }
+         */
     }
     
     void drawFbo(){
 		if (!ndiIn) return;
 
-        int nBlobs = contourFinder.blobs.size();
-        int okBlobNum = 0;
         
         // FBO for Blob
         if(bDetectBlob){
-            senderBlob.begin();
+            /*
+             int nBlobs = contourFinder.blobs.size();
+             int okBlobNum = 0;
+             
+             senderBlob.begin();
 			ofPushMatrix();
-			float sx = (float)processWidth / receiver.getWidth();
-			float sy = (float)processHeight / receiver.getHeight();
+            float inputWidth = receiver.getWidth();
+            float inputHeight = receiver.getHeight();
+            
+            float sx = (float)processWidth / inputWidth;
+            float sy = (float)processHeight / inputHeight;
 			ofScale(sx, sy);
 
 			for(int i=0; i<nBlobs; i++){
@@ -226,7 +188,7 @@ public:
                 if(minAge <= age){
                     
                     glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
-                    float area = blob.area / (processWidth*processHeight);
+                    float area = blob.area / (inputWidth*inputHeight);
                     
                     ofSetLineWidth(1);
                     ofNoFill();
@@ -238,17 +200,19 @@ public:
 					}
 
                     // OSC
+                    float xrate = center.x/inputWidth;
+                    float yrate = center.y/inputHeight;
                     ofxOscMessage m;
                     m.setAddress(oscAddress.get() + "/" + ofToString(getOscAddressSlot(label)) +"/val");
                     m.addIntArg(label);
-                    m.addFloatArg(center.x/processWidth);
-                    m.addFloatArg(center.y/processHeight);
+                    m.addFloatArg(xrate);
+                    m.addFloatArg(yrate);
                     m.addFloatArg(glm::length(velocity));
                     m.addFloatArg(area);
                     m.addIntArg(age);
                     
                     // polar coordinate
-                    glm::vec2 p = toPolar(center.x, center.y, processWidth, processHeight);
+                    glm::vec2 p = toPolar(center.x, center.y, inputWidth, inputHeight);
                     m.addFloatArg(p.x);
                     m.addFloatArg(p.y);
 
@@ -256,14 +220,9 @@ public:
                     
                     okBlobNum++;
                     
-                    // Effects
-					if (bHeatmap) {
-						float min = heatSizeMin * processWidth * 0.01;
-						float max = heatSizeMax * processWidth * 0.01;
-						float heatRadius = ofMap(area, 0, 1, min, max, true);
-						heatmap.setRadius(heatRadius);
-						heatmap.addPoint(center.x, center.y);
-					}
+                    if(bHeatmap){
+                        heatmap.add(xrate, yrate, area);
+                    }
                     
                     if(okBlobNum >= maxBlobNum) break;
                 }else {
@@ -279,39 +238,24 @@ public:
             }
             ofPopMatrix();
             senderBlob.end();
+             */
         } // end of FBO for Blob
 
 
 		// FBO for Heatmap
 		if (bHeatmap) {
-			//heatmap.update(OFX_HEATMAP_CS_SPECTRAL_SOFT);
-			heatmap.update(heatColor);
-
-			senderHeatmap.begin();
-			ofSetColor(255, heatAlpha);
-			heatmap.draw(0, 0);
-			senderHeatmap.end();
+            heatmap.drawToFbo();
 		}
 
         if(bGlitch){
-            ofPushStyle();
-            ofEnableAlphaBlending();
-            combinedFbo.begin();
-            int w = combinedFbo.getWidth();
-            int h = combinedFbo.getHeight();
-            
-            ofClear(0,0,0,0);
-            ofSetColor(255);
+            glitch.beginTarget();
+            int w = glitch.targetFbo.getWidth();
+            int h = glitch.targetFbo.getHeight();
             currentImage.draw(0,0,w,h);
-            if(bDetectBlob) senderBlob.draw(0,0,w,h);
-            if(bHeatmap) senderHeatmap.draw(0,0,w,h);
-            combinedFbo.end();
-            ofPopStyle();
-            
-            // Glitch
-            senderGlitch.begin();
-            glitch.draw(combinedFbo, 0, h, w, -h);
-            senderGlitch.end();
+            //if(bDetectBlob) tracker.draw(0,0,w,h);
+            if(bHeatmap) heatmap.drawFbo(0,0,w,h);
+            glitch.endTarget();
+            glitch.drawToFbo(w, h);
         }
     }
     
@@ -330,7 +274,7 @@ public:
     }
     
     int getOscAddressSlot(int label){
-        return label % maxBlobNum + 1;
+        return label % tracker.maxBlobNum + 1;
     }
     
     void drawSolo(){
@@ -346,8 +290,8 @@ public:
             ofSetColor(255);
             ofSetRectMode(OF_RECTMODE_CENTER);
 			currentImage.draw(ofGetWidth() / 2, ofGetHeight() / 2, v.width, v.height);
-			senderBlob.draw(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
-            senderHeatmap.draw(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
+			//tracker.senderBlob.draw(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
+            heatmap.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
             ofSetRectMode(OF_RECTMODE_CORNER);
 			ofPopStyle();
         }
@@ -373,29 +317,29 @@ public:
             if(bDetectBlob){
                 // 2
                 ty += h+10;
-                foregroundImage.draw(0, ty, w, h);
+                //foregroundImage.draw(0, ty, w, h);
 
                 // 2+
                 ofPushStyle();
                 ofEnableAlphaBlending();
-                senderBlob.draw(0, ty, w, h);
+                //senderBlob.draw(0, ty, w, h);
                 ofPopStyle();
             }
     
             if(bHeatmap){
-                // 4
+                // 3
                 ty += h+10;
-                senderHeatmap.draw(0, ty, w, h);
+                heatmap.drawFbo(0, ty, w, h);
             }
             
             if(bGlitch){
+                // 4
+                ty += h+10;
+                glitch.drawTargetFbo(0, ty, w, h);
+                
                 // 5
                 ty += h+10;
-                combinedFbo.draw(0, ty, w, h);
-                
-                // 6
-                ty += h+10;
-                senderGlitch.draw(0, ty, w, h);
+                glitch.drawFbo(0, ty, w, h);
             }
             
             // 7 info text
@@ -406,6 +350,7 @@ public:
             ofDrawBitmapString("label   age   OscAdrsSlot", 0, -5);
             char c[255];
             
+            /*
             int i = 0;
             map<int, bool>::iterator itr = detectedBlobs.begin();
             for(; itr!=detectedBlobs.end(); itr++){
@@ -417,6 +362,7 @@ public:
                 ofDrawBitmapString(c, 0, (i+1)*15);
                 i++;
             }
+             */
             ofPopMatrix();
             ofPopStyle();
         }
@@ -436,9 +382,9 @@ public:
     
     void sendNDI(){
         if(ndiOut){
-            senderBlob.send();
-            senderHeatmap.send();
-            senderGlitch.send();
+            //tracker.send();
+            heatmap.send();
+            glitch.send();
         }
     }
     
@@ -453,85 +399,38 @@ public:
 
 	string longName = "";
 
+    // NDI receive
+    NDIReceiver receiver;
+
     ofxCvColorImage currentImage;
-    ofPixels foregroundPix;
-    ofxCvGrayscaleImage foregroundImage;
-    ofxCvContourFinder contourFinder;
-    
-    ofxCv::RectTracker tracker;
-    std::vector<cv::Rect> rects;
-    std::map<int, bool> detectedBlobs; // label, noteOnSent
-
-	// NDI receive
-	NDIReceiver receiver;
-
-    // NID send
-    NDISender senderBlob;
-    NDISender senderHeatmap;
-    NDISender senderGlitch;
-        
-    int frameCounter = 0;
     
     ofxOscSender oscSender;
-    
-    //
-    ofFbo combinedFbo;
-    
-    // Effects
-    ofxHeatMap heatmap;
-    
-    ofxEasyFboGlitch glitch;
-    
+
+    mtb::mtbGlitch glitch;
+    mtb::mtbHeatmap heatmap;
+    mtb::mtbTracker tracker;
+
+    // General
     ofParameter<string> NDI_name{"Name", "sender1"};
     ofParameter<bool> ndiIn{"NDI IN",false};
     ofParameter<bool> ndiOut{"NDI OUT", false};
-	/*ofParameter<bool> ndiInHighestBandwidth{ "NDI In Highest Bandwidth", false };*/
 	ofParameter<int> processWidth{ "Process Width", 1280, 240, 1920};
 	ofParameter<int> processHeight{ "Process Height", 720, 135, 1080};
 	ofParameterGroup generalGrp{ "NDI in/out", NDI_name, ndiIn, ndiOut, /*ndiInHighestBandwidth,*/ processWidth, processHeight };
 
-	// cv::BackgroundSubtractor
-    cv::Ptr<cv::BackgroundSubtractor> pBackSub;
-    cv::Mat currentMat, foregroundMat;
-    
-    ofParameter<int> bgAlgo{"BG Algo", 1, 0, 1};
-    ofParameterGroup bgGrp{"Background Subtractor", bgAlgo};
-    
-    // CV::Contor, CV::Tracker
-    ofParameter<float> minArea{ "minArea", 5, 0, 100 };
-    ofParameter<float> maxArea{ "maxArea", 10, 0, 300 };
-    ofParameter<bool> bFindHoles{ "find holes", false };
-    ofParameter<bool> bSimplify{ "simplify", false };
-    ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
-    ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 300 };
-    ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
-    ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
-    ofParameter<int> minAge{ "Min age", 10, 0, 60 };
-	//ofParameter<float> blobScale{ "scale", 1, 0.1, 4.0 };
-    ofParameterGroup trackerGrp{ "Tracker", minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, maxBlobNum, minAge, /*blobScale */};
-    
+    // Layers
+    ofParameter<bool> bDetectBlob{"Detect Blob", true};
+    ofParameter<bool> bHeatmap{"Heat Map", true};
+    ofParameter<bool> bGlitch{"Glitch", true};
+    ofParameterGroup layerGrp{"Layer", bDetectBlob, bHeatmap, bGlitch};
+
     // OSC sender settings
     ofParameter<string> oscIp{"IP", "localhost"};
     ofParameter<int> oscPort{"port", 12345, 0, 12345};
     ofParameter<string> oscAddress{"oscAddress", "NDITracker"};
     ofParameterGroup oscGrp{"OSC send", oscIp, oscPort, oscAddress};
-
-	// Heatmap
-	ofParameter<int> heatColor{ "Color Scheme", 1, 0, heatmap.schemes.size()-1 };
-	ofParameter<int> heatAlpha{ "Alpha", 200, 0, 255 };
-	ofParameter<int> heatSizeMin{ "Size Min %", 1, 1, 20 };
-	ofParameter<int> heatSizeMax{ "Size Max %", 5, 1, 20 };
-
-	ofParameterGroup heatmapGrp{ "Heat Map", heatColor, heatAlpha, heatSizeMin, heatSizeMax};
-
-
-    // layers
-    ofParameter<bool> bDetectBlob{"Detect Blob", true};
-    ofParameter<bool> bHeatmap{"Heat Map", true};
-    ofParameter<bool> bGlitch{"Glitch", true};
-    ofParameterGroup layerGrp{"Layer", bDetectBlob, bHeatmap, bGlitch};
     
-    ofParameterGroup prm{"NDI source", generalGrp, bgGrp, trackerGrp, oscGrp, heatmapGrp, layerGrp};
+    ofParameterGroup prm{"NDI source", generalGrp, layerGrp, oscGrp, tracker.grp, heatmap.grp};
     
     ofEventListeners listenerHolder;
 };
