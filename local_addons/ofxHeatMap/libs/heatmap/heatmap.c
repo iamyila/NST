@@ -253,8 +253,10 @@ heatmap_stamp_t* heatmap_stamp_gen_nonlinear(unsigned r, float (*distshape)(floa
 
 void heatmap_stamp_free(heatmap_stamp_t* s)
 {
-    free(s->buf);
-    free(s);
+    if(s != NULL){
+        free(s->buf);
+        free(s);
+    }
 }
 
 heatmap_colorscheme_t* heatmap_colorscheme_load(const unsigned char* in_colors, size_t ncolors)

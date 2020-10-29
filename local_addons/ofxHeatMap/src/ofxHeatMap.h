@@ -179,7 +179,7 @@ class ofxHeatMap
 public:
     ofxHeatMap()
     {
-        setup(OFX_HEATMAP_DEFAULT_WIDTH, OFX_HEATMAP_DEFAULT_HEIGHT);
+        //setup(OFX_HEATMAP_DEFAULT_WIDTH, OFX_HEATMAP_DEFAULT_HEIGHT);
     }
     
     ofxHeatMap(unsigned int w, unsigned int h)
@@ -207,9 +207,11 @@ public:
     
     ~ofxHeatMap()
     {
-        heatmap_free(mHeatMap);
-        heatmap_stamp_free(mStamp);
-        mHeatMapImg.clear();
+        if (mColorBuf.size() != 0) {
+            heatmap_free(mHeatMap);
+            heatmap_stamp_free(mStamp);
+            mHeatMapImg.clear();
+        }
     }
     
     void setup(unsigned int w, unsigned int h, unsigned int radius = 16)
