@@ -11,7 +11,7 @@ void ofApp::setup(){
     gui.add(connectNDIBtn);
     listenerHolder.push(connectNDIBtn.newListener([&](void){ connectNDI();}));
     
-    for(int i=0; i<10; i++){
+    for(int i=0; i<1; i++){
         std::shared_ptr<NDIsource> ndi = make_shared<NDIsource>();
         ndi->prm.setName("NDI source " + ofToString(i+1));
         gui.add(ndi->prm);
@@ -21,8 +21,8 @@ void ofApp::setup(){
     gui.loadFromFile("settings.json");
     gui.minimizeAll();
 
-    int camWidth = 640;
-    int camHeight = 480;
+    int camWidth = 1280;
+    int camHeight = 720;
     for(int i=0; i<ndis.size(); i++){
         ndis[i]->setup(camWidth, camHeight);
     }

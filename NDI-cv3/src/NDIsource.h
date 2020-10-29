@@ -35,7 +35,7 @@ public:
 
         // NDI sender
         setupNDI_OUT();
-        sender_Fbo.allocate(640, 360, GL_RGBA);
+        sender_Fbo.allocate(w, h, GL_RGBA);
         sender_Fbo.begin();
         ofClear(255,255,255, 0);
         sender_Fbo.end();
@@ -160,18 +160,21 @@ public:
         
         if(receiver.isConnected()){
         
+            int h = 200;
+            int w = h * 1920/1080;
+
             ofSetColor(255);
-            grayImage.draw(0,0,320,240);
+            grayImage.draw(0,0,w, h);
             if(bUseBG){
-                grayBg.draw(320,0,320,240);
-                grayFinal.draw(640,0,320,240);
+                grayBg.draw(w,0,w,h);
+                grayFinal.draw(w*2,0,w,h);
             }else{
                 ofNoFill();
                 ofSetColor(255);
-                ofDrawRectangle(320, 0, 320, 240);
-                ofDrawLine(320, 0, 640, 240);
-                ofDrawLine(320, 240, 640, 0);
-                grayImage.draw(640, 0, 320, 240);
+                ofDrawRectangle(w, 0, w, h);
+                ofDrawLine(w, 0, w*2, h);
+                ofDrawLine(w, h, w*2, 0);
+                grayImage.draw(w*2, 0, w, h);
             }
             
            if(1){
@@ -203,7 +206,7 @@ public:
             float camHeight = grayFinal.getHeight();
             
             ofPushMatrix();
-            ofTranslate(960, 0);
+            ofTranslate(w*2, 0);
             
             ofxOscBundle bundle;
 
@@ -227,7 +230,7 @@ public:
                     ofNoFill();
                     
                     ofPushMatrix();
-                    ofScale(320/camWidth, 240/camHeight);
+                    ofScale(w/camWidth, h/camHeight);
 
                     ofColor c;
                     c.setHsb(label*10%255, 255, 255);
@@ -257,7 +260,7 @@ public:
                     
                 }else {
                     ofPushMatrix();
-                    ofScale(320/camWidth, 240/camHeight);
+                    ofScale(w/camWidth, h/camHeight);
                     ofTranslate(center);
                     ofSetColor(255);
                     ofSetRectMode(OF_RECTMODE_CENTER);
