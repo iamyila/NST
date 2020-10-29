@@ -240,7 +240,7 @@ namespace mtb{
             }
         }
         
-        void drawForeground(int x, int y, int w, int h){
+        void drawReference(int x, int y, int w, int h){
             foregroundImage.draw(x, y, w, h);
         }
         

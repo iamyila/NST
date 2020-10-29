@@ -14,6 +14,7 @@
 #include "mtbHeatmap.h"
 #include "mtbGlitch.h"
 #include "mtbTracker.h"
+#include "mtbTrackerRegacy.h"
 
 using std::string;
 
@@ -103,7 +104,7 @@ public:
 			pix.setImageType(OF_IMAGE_COLOR);
 			currentImage.setFromPixels(pix);
             if (bDetectBlob) {
-                tracker.update(currentImage);
+                tracker.update(currentImage);                
 			}
 
 			drawFbo();
@@ -167,7 +168,7 @@ public:
         if(bDetectBlob){
             float rw = receiver.getWidth();
             float rh = receiver.getHeight();
-            tracker.drawToFbo2(rw, rh, processWidth, processHeight);
+            tracker.drawToFbo(rw, rh, processWidth, processHeight);
             
             /*
              int nBlobs = contourFinder.blobs.size();
@@ -321,7 +322,8 @@ public:
             if(bDetectBlob){
                 // 2
                 ty += h+10;
-                tracker.drawForeground(0, ty, w, h);
+                tracker.drawReference(0, ty, w, h);
+                //tracker.drawReference(0, ty, w, h);
 
                 // 2+
                 ofPushStyle();
@@ -358,7 +360,7 @@ public:
             ofTranslate(w+110, 28);
             ofSetColor(255);
             ofDrawBitmapString("label   age", 0, -5);
-            tracker.drawInfo2();
+            tracker.drawInfo();
             ofPopMatrix();
 
             ofPopStyle();
