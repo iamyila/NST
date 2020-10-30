@@ -36,12 +36,12 @@ namespace mtb{
             sender.sendMessage(m);
         }
         
-        void sendVal(int label, glm::vec2 xyrate, float vel, float area, int age, glm::vec2 center, glm::vec2 inputSize, int maxBlobNum){
+        void sendVal(int label, int maxBlobNum, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
             ofxOscMessage m;
             m.setAddress(oscAddress.get() + "/" + ofToString(getOscAddressSlot(label, maxBlobNum)) +"/val");
             m.addIntArg(label);
-            m.addFloatArg(xyrate.x);
-            m.addFloatArg(xyrate.y);
+            m.addFloatArg(center.x/inputSize.x);
+            m.addFloatArg(center.y/inputSize.y);
             m.addFloatArg(glm::length(vel));
             m.addFloatArg(area);
             m.addIntArg(age);

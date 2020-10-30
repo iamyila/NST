@@ -14,7 +14,6 @@
 #include "mtbHeatmap.h"
 #include "mtbGlitch.h"
 #include "mtbTracker.h"
-#include "mtbTrackerLegacy.h"
 #include "OscSender.h"
 
 using std::string;
@@ -34,7 +33,7 @@ public:
         currentImage.clear();
         currentImage.allocate(w,h);
         setupAll();
-        
+                
         tracker.registerUser(this);
     }
          
@@ -99,12 +98,13 @@ public:
 			ofPixels& pix = receiver.getPixels();
 			pix.setImageType(OF_IMAGE_COLOR);
 			currentImage.setFromPixels(pix);
-            if (bDetectBlob) {
-                tracker.update(currentImage);                
-			}
+        }
 
-			drawFbo();
-		}
+        if (bDetectBlob) {
+            tracker.update(currentImage);
+        }
+        
+        drawFbo();
     }       
   
     void drawFbo(){
@@ -148,9 +148,8 @@ public:
             ofSetColor(255);
             ofSetRectMode(OF_RECTMODE_CENTER);
 			currentImage.draw(ofGetWidth() / 2, ofGetHeight() / 2, v.width, v.height);
-			tracker.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
-            heatmap.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
-            ofSetRectMode(OF_RECTMODE_CORNER);
+			if(bDetectBlob) tracker.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
+            if(bHeatmap) heatmap.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
 			ofPopStyle();
         }
     }
@@ -233,9 +232,9 @@ public:
     
     void sendNDI(){
         if(ndiOut){
-            tracker.send();
-            heatmap.send();
-            glitch.send();
+            if (bDetectBlob) tracker.sendNDI();
+            if (bHeatmap) heatmap.sendNDI();
+            if (bGlitch) glitch.sendNDI();
         }
     }
     
@@ -248,21 +247,21 @@ public:
 	}
     
     void addPointToHeatmap(float x, float y, float area){
-        heatmap.add(x, y, area);
+        if(bHeatmap) heatmap.add(x, y, area);
     }
+
+public:
+    mtb::mtbTracker tracker;
+    mtb::mtbHeatmap heatmap;
+    mtb::mtbGlitch glitch;
+    mtb::OscSender oscSender;
+
+    string longName = "";
     
-
-	string longName = "";
-
     // NDI receive
     NDIReceiver receiver;
     ofxCvColorImage currentImage;
 
-    mtb::mtbGlitch glitch;
-    mtb::mtbHeatmap heatmap;
-    mtb::mtbTracker tracker;
-    mtb::OscSender oscSender;
-    
     // General
     ofParameter<string> NDI_name{"Name", "sender1"};
     ofParameter<bool> ndiIn{"NDI IN",false};
@@ -281,5 +280,5 @@ public:
     
     ofParameterGroup prm{"NDI source", generalGrp, layerGrp, oscSender.grp, tracker.grp, heatmap.grp};
     
-    ofEventListeners listenerHolder;
+    ofEventListeners listenerHolder;    
 };

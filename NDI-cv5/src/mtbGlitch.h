@@ -59,7 +59,7 @@ namespace mtb{
             senderGlitch.draw(x, y, w, h);
         }
 
-        void send(){
+        void sendNDI(){
             senderGlitch.send();
         }
         

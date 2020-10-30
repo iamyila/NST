@@ -49,7 +49,7 @@ namespace mtb{
             }
         }
         
-        void send(){
+        void sendNDI(){
             senderHeatmap.send();
         }
         

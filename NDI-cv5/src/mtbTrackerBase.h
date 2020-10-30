@@ -17,7 +17,7 @@ namespace mtb{
         
     public:
         
-        virtual void registerUser(NDISource * s) = 0;
+        void registerUser(NDISource * s);
         virtual void setup(string name, int w, int h, bool ndiOut) = 0;
         virtual void update(ofxCvColorImage & currentImage) = 0;
         virtual void findContour() = 0;
@@ -32,11 +32,12 @@ namespace mtb{
             senderBlob.clear();
         }
         
-        void send(){
+        void sendNDI(){
             senderBlob.send();
         }
         
         void drawLabelAndAge(int label, int x=0, int y=0){
+            auto & tracker = finder.getTracker();
             int age = tracker.getAge(label);
             char c[255];
             sprintf(c, "%3i:%3i", label, age);
@@ -44,6 +45,7 @@ namespace mtb{
         }
         
         void drawInfo(){
+            auto & tracker = finder.getTracker();
             char c[255];
             int i = 0;
             auto itr = selectedBlobs.begin();
@@ -57,7 +59,17 @@ namespace mtb{
             }
         }
         
-        ofxCv::RectTracker tracker;
+        void addPointToHeatmap(float x, float y, float area);
+        
+        // osc wrapper
+        void sendNoteOn(int label, int maxBlobNum);
+        void sendNoteOff(int label, int maxBlobNum);
+        void sendVal(int label, int maxBlobNum, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize);
+        
+        //ofxCvContourFinder contourFinder;
+        ofxCv::ContourFinder finder;
+        //ofxCv::RectTracker tracker;
+
         std::vector<cv::Rect> rects;
         std::map<int, bool> selectedBlobs; // label, noteOnSent
         

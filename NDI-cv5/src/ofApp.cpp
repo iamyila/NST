@@ -141,11 +141,10 @@ void ofApp::keyPressed(int key){
             ofToggleFullscreen();
             break;
 
-        case 'c':
 		case ' ':
 			connectNDI();
             break;
-        
+            
         case 's':
 			soloMode = !soloMode;
             break;
@@ -153,6 +152,11 @@ void ofApp::keyPressed(int key){
         case 'g':
             ndis[0]->glitch.doGlitch(ofRandom(1, 10));
             break;
+            
+        case 'c':
+            ndis[0]->tracker.bDrawCandidates = !ndis[0]->tracker.bDrawCandidates;
+            break;
+
     }
 }
 
