@@ -54,7 +54,7 @@ namespace mtb{
                 bool bNoteOnSent = (*itr).second;
                 int age = tracker.getAge(label);
                 bNoteOnSent ? ofSetHexColor(0xff0099) : ofSetColor(220);
-                drawLabelAndAge(label, 0, i*15);
+                drawLabelAndAge(label, 0, 10+i*15);
                 i++;
             }
         }

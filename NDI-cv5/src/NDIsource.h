@@ -203,16 +203,10 @@ public:
             ofPushMatrix();
             ofTranslate(w+10, 28);
             ofSetColor(255);
-            ofDrawBitmapString("label   age", 0, -5);
+            ofDrawBitmapString("label : age", 0, -5);
             tracker.drawInfo();
             ofPopMatrix();
             
-            ofPushMatrix();
-            ofTranslate(w+110, 28);
-            ofSetColor(255);
-            ofDrawBitmapString("label   age", 0, -5);
-            tracker.drawInfo();
-            ofPopMatrix();
 
             ofPopStyle();
         }
