@@ -223,10 +223,10 @@ namespace ofxCv {
 		deadLabels.clear();
 		for(int j = 0; j < m; j++) {
 			if(!matchedPrevious[j]) {
-//                if(previous[j].getLastSeen() < persistence) {
-//                    current.push_back(previous[j]);
-//                    current.back().timeStep(false);
-//                }
+                if(previous[j].getLastSeen() < persistence) {
+                    current.push_back(previous[j]);
+                    current.back().timeStep(false);
+                }
 				deadLabels.push_back(previous[j].getLabel());
 			}
 		}
@@ -362,6 +362,19 @@ namespace ofxCv {
 				return cv::Vec2f(0, 0);
 			}
 		}
+        
+        cv::Vec2f getVelocityFromLabel(unsigned int label) const {
+            if(existsPrevious(label)) {
+                const cv::Rect& previous = getPrevious(label);
+                const cv::Rect& current = getCurrent(label);
+                cv::Vec2f previousPosition(previous.x + previous.width / 2, previous.y + previous.height / 2);
+                cv::Vec2f currentPosition(current.x + current.width / 2, current.y + current.height / 2);
+                return currentPosition - previousPosition;
+            } else {
+                return cv::Vec2f(0, 0);
+            }
+        }
+
 	};
 	
 	typedef Tracker<cv::Point2f> PointTracker;

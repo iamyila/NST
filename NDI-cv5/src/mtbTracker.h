@@ -44,7 +44,7 @@ namespace mtb{
             pBackSub->apply(currentMat, foregroundMat);
             ofxCv::toOf(foregroundMat, foregroundPix);
             foregroundImage.setFromPixels(foregroundPix);
-            if(0<blurAmt) foregroundImage.blur(blurAmt);
+            if(0<blurAmt) foregroundImage.blur(blurAmt*2+1);
             findContour();
         }
         
@@ -57,7 +57,7 @@ namespace mtb{
             finder.setFindHoles(bFindHoles);
 
             ofxCv::RectTracker & tracker = finder.getTracker();
-            tracker.setSmoothingRate(smoothingRate);
+            //tracker.setSmoothingRate(smoothingRate);
             tracker.setMaximumDistance(maxDistance);
             tracker.setPersistence(persistence);
 
@@ -165,7 +165,7 @@ namespace mtb{
                     
                     // text
                     int label = tracker.getCurrentLabels()[i];
-                    drawLabelAndAge(label, -rect.width/2, rect.height/2+15);
+                    drawLabelAndAge(label, -rect.width/2-15, rect.height/2+15);
                     ofPopMatrix();
                 }
                 ofPopStyle();
@@ -183,7 +183,8 @@ namespace mtb{
                 glm::vec2 center(rect.x+rect.width/2, rect.y+rect.height/2);
                 float area = (rect.width * rect.height) / (receiverW*receiverH);
 
-                // this index might not be really reliable
+                // this index might not be really reliable,
+                // so only for drawing perpose
                 int index = tracker.getIndexFromLabel(label);
                 ofPolyline & poly = finder.getPolyline(index);
                 
@@ -191,18 +192,18 @@ namespace mtb{
                 ofPushMatrix();
                 ofSetLineWidth(1);
                 ofNoFill();
-                bNoteOnSent ? ofSetColor(255, 0, 0) : ofSetColor(255);
+                bNoteOnSent ? ofSetColor(255, 0, 0) : ofSetColor(255,200);
                 poly.draw();
                 ofTranslate(center.x, center.y);
                 ofSetRectMode(OF_RECTMODE_CENTER);
                 ofDrawRectangle(0, 0, rect.width+5, rect.height+4);
-                drawLabelAndAge(label, -rect.width/2, rect.height/2+15);
+                drawLabelAndAge(label, -rect.width/2-15, rect.height/2+15);
                 ofPopMatrix();
                 ofPopStyle();
                 
                 // osc
                 if(bNoteOnSent){
-                    glm::vec2 vel(0,0);// = ofxCv::toOf(tracker.getVelocity(index));
+                    glm::vec2 vel = ofxCv::toOf(tracker.getVelocityFromLabel(label));
                     glm::vec2 xyrate(center.x/receiverW, center.y/receiverH);
                     glm::vec2 inputSize(receiverW, receiverH);
                     sendVal(label, maxBlobNum, vel, area, age, center, inputSize);
@@ -229,7 +230,7 @@ namespace mtb{
         cv::Mat currentMat, foregroundMat;
         
         ofParameter<int> bgAlgo{"Background Subtractor Algo", 1, 0, 1};
-        ofParameter<float> blurAmt{ "Blur amount", 3, 1, 20 };
+        ofParameter<float> blurAmt{ "Blur amount", 3, 0, 20 };
 
         // CV::Contor, CV::Tracker
         ofParameter<float> minArea{ "minArea", 5, 0, 500 };
@@ -238,12 +239,12 @@ namespace mtb{
         ofParameter<bool> bSimplify{ "simplify", false };
         ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
         ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 500 };
-        ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
+        //ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
         ofParameter<int> maxBlobCandidate{ "Max blob candidate", 10, 1, 100 };
         ofParameter<bool> bDrawCandidates{ "Draw Candidates", true};
         ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
         ofParameter<int> minAge{ "Min age", 10, 0, 60 };
-        ofParameterGroup grp{ "Tracker", bgAlgo, blurAmt, minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, smoothingRate, bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, /*blobScale */};
+        ofParameterGroup grp{ "Tracker", bgAlgo, blurAmt, minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, /*blobScale */};
     };
     
 }
