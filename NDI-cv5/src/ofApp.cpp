@@ -17,8 +17,8 @@ void ofApp::setup(){
     gui.setPosition(10, 20);
     
     for(int i=0; i<1; i++){
-        std::shared_ptr<NDIsource> ndi = make_shared<NDIsource>();
-        ndi->prm.setName("NDI source " + ofToString(i+1));
+        std::shared_ptr<NDISource> ndi = make_shared<NDISource>();
+        ndi->prm.setName("NDI Source " + ofToString(i+1));
         gui.add(ndi->prm);
         ndis.emplace_back(ndi);
     }

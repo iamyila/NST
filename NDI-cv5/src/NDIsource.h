@@ -1,5 +1,5 @@
 //
-//  NDIsource.h
+//  NDISource.h
 //
 
 #pragma once
@@ -14,15 +14,15 @@
 #include "mtbHeatmap.h"
 #include "mtbGlitch.h"
 #include "mtbTracker.h"
-#include "mtbTrackerRegacy.h"
+#include "mtbTrackerLegacy.h"
 #include "OscSender.h"
 
 using std::string;
 
-class NDIsource{
+class NDISource{
     
 public:
-    NDIsource(){
+    NDISource(){
 		registerCallback();
 	};
     
@@ -34,8 +34,10 @@ public:
         currentImage.clear();
         currentImage.allocate(w,h);
         setupAll();
-    }    
-    
+        
+        tracker.registerUser(this);
+    }
+         
 	void connect() {
 		longName = receiver.connect(NDI_name /*, ndiInHighestBandwidth*/);
 	}
@@ -107,7 +109,6 @@ public:
   
     void drawFbo(){
 		if (!ndiIn) return;
-
         
         // FBO for Blob
         if(bDetectBlob){
@@ -175,7 +176,6 @@ public:
                 // 2
                 ty += h+10;
                 tracker.drawReference(0, ty, w, h);
-                //tracker.drawReference(0, ty, w, h);
 
                 // 2+
                 ofPushStyle();
@@ -246,7 +246,11 @@ public:
 		if (bGlitch)		nMonitor+=2;
 		return nMonitor;
 	}
-
+    
+    void addPointToHeatmap(float x, float y, float area){
+        heatmap.add(x, y, area);
+    }
+    
 
 	string longName = "";
 
@@ -275,7 +279,7 @@ public:
 
     ofParameter<int> lockMsec{"Lock msec", 0, 0, 10000};
     
-    ofParameterGroup prm{"NDI source", generalGrp, layerGrp, oscSender.grp, tracker.grp, lockMsec, heatmap.grp};
+    ofParameterGroup prm{"NDI source", generalGrp, layerGrp, oscSender.grp, tracker.grp, heatmap.grp};
     
     ofEventListeners listenerHolder;
 };

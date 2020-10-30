@@ -1,5 +1,5 @@
 //
-//  mtbTrackerRegacy.h
+//  mtbTrackerLegacy.h
 //
 //
 
@@ -9,14 +9,17 @@
 #include "ofxOpenCv.h"
 #include "ofxCv.h"
 #include "NDISender.h"        // my own helper class
+#include "mtbTrackerBase.h"
 
 namespace mtb{
     
-    class mtbTrackerRegacy{
+    class mtbTrackerLegacy : public mtbTrackerBase{
       
     public:
+
+        void registerUser(NDISource * s) override;
         
-        void setup(string name, int w, int h, bool ndiOut){
+        void setup(string name, int w, int h, bool ndiOut) override{
             
             grayImage.allocate(w,h);
             grayBg.allocate(w,h);
@@ -37,7 +40,7 @@ namespace mtb{
             }));
         }
         
-        void update(ofxCvColorImage & img){
+        void update(ofxCvColorImage & img) override{
             grayImage.setFromColorImage(img);
             
             if(bUseBG){
@@ -84,7 +87,7 @@ namespace mtb{
             findContour();
         }
         
-        void findContour(){
+        void findContour() override{
             // contour finder
             if(grayFinal.bAllocated){
                 contourFinder.findContours(grayFinal, minArea, maxArea, maxBlobNum, bFindHoles, bSimplify);
@@ -100,44 +103,9 @@ namespace mtb{
             }
         }
         
-        void drawToFbo(float receiverW, float receiverH, float processW, float processH){
-            senderBlob.begin();
-            
-            float sx = (float)processW / receiverW;
-            float sy = (float)processH / receiverH;
-            ofPushMatrix();
-            ofScale(sx, sy);
-                 int okBlobNum = 0;
-            int nBlobs = contourFinder.blobs.size();
-            for(int i=0; i<nBlobs; i++){
-                int label = tracker.getCurrentLabels()[i];
-                int age = tracker.getAge(label);
-                ofxCvBlob & blob = contourFinder.blobs[i];
-                ofRectangle & rect = blob.boundingRect;
-                glm::vec2 center(rect.x + rect.width/2, rect.y + rect.height/2);
-                glm::vec2 velocity = ofxCv::toOf(tracker.getVelocity(i));
-                float area = blob.area / (receiverW*receiverH);
-                
-                {
-                    ofSetLineWidth(1);
-                    ofNoFill();
-                    blob.draw();
-                
-                    ofSetColor(255);
-                    stringstream ss;
-                    ss << label << " : " << age;
-                    ofDrawBitmapString(ss.str(), center.x, center.y);
-                }
-                
-                okBlobNum++;
-                if(okBlobNum >= maxBlobNum) break;
-            }
-            
-            ofPopMatrix();
-            senderBlob.end();
-        }
+        void drawToFbo(float receiverW, float receiverH, float processW, float processH) override;
         
-        void drawReference(int x, int y, int w, int h){
+        void drawReference(int x, int y, int w, int h) override{
             if(bUseBG){
                 ofSetColor(255);
                 //grayImage.draw(x,y,w,h);
@@ -153,21 +121,10 @@ namespace mtb{
             }
         }
 
-        void drawFbo(int x, int y, int w, int h){
-            senderBlob.draw(x, y, w, h);
-        }
-        
         void drawInfo(){
             
         }
 
-        void clear(){
-            senderBlob.clear();
-        }
-        
-        void send(){
-            senderBlob.send();
-        }
         
     public:
         int frameCounter = 0;
@@ -178,10 +135,6 @@ namespace mtb{
         ofxCvGrayscaleImage grayDiff;
         ofxCvGrayscaleImage grayFinal;
         ofxCvContourFinder contourFinder;
-        
-        ofxCv::RectTracker tracker;
-        vector<cv::Rect> rects;
-        
         
         ofParameter<bool> bUseBG{"Use BG", false};
         ofParameter<int>  bgThreshold{"Threshold", 80, 10, 300};
@@ -204,8 +157,5 @@ namespace mtb{
         
         ofParameterGroup grp{"Tracker Rg", bgGrp, trackerGrp};
 
-        ofEventListeners listenerHolder;
-
-        NDISender senderBlob;
     };
 }

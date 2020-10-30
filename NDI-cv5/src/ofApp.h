@@ -3,7 +3,7 @@
 #include "ofMain.h"
 #include "ofxOsc.h"
 #include "ofxGui.h"
-#include "NDIsource.h"
+#include "NDISource.h"
 #include "AppParam.h"
 #include "ofxOscReceiver.h"
 
@@ -18,7 +18,7 @@ public:
     void receiveOsc();
     
     bool bHide = false;
-    vector<std::shared_ptr<NDIsource>> ndis;
+    vector<std::shared_ptr<NDISource>> ndis;
 
     ofxPanel gui;
     mtb::AppParam appPrm;
