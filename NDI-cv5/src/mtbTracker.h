@@ -68,16 +68,20 @@ namespace mtb{
             auto itrD = deads.begin();
             for(; itrD<deads.end(); ++itrD){
                 int label = *itrD;
-                if(selectedBlobs.count(label) != 0){
-                    if(selectedBlobs[label] == true){
-                        // this one need NoteOff
+                
+                // did we send NoteOn before?
+                if(isNoteOnSent(label)){
+                    if(needNoteOff(label, maxBlobNum)){
                         sendNoteOff(label, maxBlobNum);
+                        cout << "NoteOff " << label << endl;
                     }
+
+                    noteOnSentMap.erase(label);
                 }
             }
             
             // Copy
-            map<int, bool> prevSelectedBlobs(selectedBlobs);
+            vector<int> prevSelectedBlobs(selectedBlobs);
             selectedBlobs.clear();
 
             // process Current blobs
@@ -115,19 +119,20 @@ namespace mtb{
 
             for(; itrC!=currs.end(); ++itrC){
                 int label = *itrC;
-                bool noteOnSent = false;
-                if(prevSelectedBlobs.count(label) != 0){
-                    noteOnSent = prevSelectedBlobs[label];
-                }else{
-                    noteOnSent = false;
-                }
-                selectedBlobs.emplace(make_pair(label, noteOnSent));
+                selectedBlobs.push_back(label);
 
+                bool noteOnSent = isNoteOnSent(label);
                 if(noteOnSent == false){
                     int age = tracker.getAge(label);
                     if(minAge <= age){
-                        selectedBlobs[label] = true;
                         sendNoteOn(label, maxBlobNum);
+                        
+                        if(noteOnSentMap.count(label) == 0){
+                            noteOnSentMap.insert(make_pair(label, true));
+                        }else{
+                            noteOnSentMap.at(label) = true;
+                        }
+                        cout << "NoteOn  " << label << endl;
                     }
                 }else{
                     // we send osc update val from drawToFbo()
@@ -175,8 +180,8 @@ namespace mtb{
             auto itr = selectedBlobs.begin();
             for(; itr!=selectedBlobs.end(); ++itr){
                 
-                int label = itr->first;
-                bool bNoteOnSent = itr->second;
+                int label = *itr;
+                bool bNoteOnSent = isNoteOnSent(label);
 
                 int age = tracker.getAge(label);
                 const cv::Rect& rect = tracker.getCurrent(label);
@@ -220,7 +225,21 @@ namespace mtb{
         void drawReference(int x, int y, int w, int h) override{
             foregroundImage.draw(x, y, w, h);
         }
-        
+
+        void drawNoteOnSlots(){
+            auto itr = noteOnSentMap.begin();
+            int i = 0;
+            for(; itr!=noteOnSentMap.end(); ++itr){
+                int label = itr->first;
+                bool sent = itr->second;
+                if(sent){
+                    char c[255];
+                    sprintf(c, "%2i", label);                    
+                    ofDrawBitmapString(c, 0, 10+i*15);
+                    i++;
+                }
+            }
+        }
     
         ofPixels foregroundPix;
         ofxCvGrayscaleImage foregroundImage;

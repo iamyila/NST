@@ -151,6 +151,21 @@ public:
 			if(bDetectBlob) tracker.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
             if(bHeatmap) heatmap.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
 			ofPopStyle();
+            
+            {
+                ofPushMatrix();
+                ofTranslate(30, 30);
+                ofSetColor(255);
+                ofDrawBitmapString("Selected label : age", 0, -5);
+                tracker.drawInfo();
+                
+                ofTranslate(300, 0);
+                ofSetColor(255);
+                ofDrawBitmapString("NoteOn sent (label)", 0, -5);
+                ofSetColor(0,255, 0);
+                tracker.drawNoteOnSlots();
+                ofPopMatrix();
+            }
         }
     }
     
@@ -203,11 +218,16 @@ public:
             ofPushMatrix();
             ofTranslate(w+10, 28);
             ofSetColor(255);
-            ofDrawBitmapString("label : age", 0, -5);
+            ofDrawBitmapString("Selected label : age", 0, -5);
             tracker.drawInfo();
+
+            ofTranslate(0, h+10);
+            ofSetColor(255);
+            ofDrawBitmapString("NoteOn sent (label)", 0, -5);
+            ofSetColor(0,255, 0);
+            tracker.drawNoteOnSlots();
             ofPopMatrix();
             
-
             ofPopStyle();
         }
         
@@ -243,7 +263,7 @@ public:
     void addPointToHeatmap(float x, float y, float area){
         if(bHeatmap) heatmap.add(x, y, area);
     }
-
+    
 public:
     mtb::mtbTracker tracker;
     mtb::mtbHeatmap heatmap;

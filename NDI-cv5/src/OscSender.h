@@ -22,23 +22,28 @@ namespace mtb{
             sender.setup(oscIp, oscPort);
         }
         
-        void sendNoteOn(int label, int maxBlobNum){
+        int sendNoteOn(int label, int maxBlobNum){
             ofxOscMessage m;
-            m.setAddress(oscAddress.get()+ "/" + ofToString(getOscAddressSlot(label, maxBlobNum)) +"/on");
+            int slot = getOscAddressSlot(label, maxBlobNum);
+            m.setAddress(oscAddress.get()+ "/" + ofToString(slot) +"/on");
             m.addIntArg(label);
-            sender.sendMessage(m);
+            sender.sendMessage(m, false);
+            return slot;
         }
         
-        void sendNoteOff(int label, int maxBlobNum){
+        int sendNoteOff(int label, int maxBlobNum){
             ofxOscMessage m;
-            m.setAddress(oscAddress.get() + "/"+ ofToString(getOscAddressSlot(label, maxBlobNum)) +"/off");
+            int slot = getOscAddressSlot(label, maxBlobNum);
+            m.setAddress(oscAddress.get() + "/"+ ofToString(slot) +"/off");
             m.addIntArg(label);
-            sender.sendMessage(m);
+            sender.sendMessage(m, false);
+            return slot;
         }
         
-        void sendVal(int label, int maxBlobNum, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
+        int sendVal(int label, int maxBlobNum, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
             ofxOscMessage m;
-            m.setAddress(oscAddress.get() + "/" + ofToString(getOscAddressSlot(label, maxBlobNum)) +"/val");
+            int slot = getOscAddressSlot(label, maxBlobNum);
+            m.setAddress(oscAddress.get() + "/" + ofToString(slot) +"/val");
             m.addIntArg(label);
             m.addFloatArg(center.x/inputSize.x);
             m.addFloatArg(center.y/inputSize.y);
@@ -51,6 +56,12 @@ namespace mtb{
             m.addFloatArg(p.x);
             m.addFloatArg(p.y);
             sender.sendMessage(m);
+            
+            return slot;
+        }
+        
+        int getOscAddressSlot(int label, int maxBlobNum){
+            return label % maxBlobNum + 1;
         }
         
     private:
@@ -66,10 +77,6 @@ namespace mtb{
             float len = sqrt(tx*tx + ty*ty);
             len = ofMap(len, 0, 1.41421356, 0.01, 2.0, true);
             return glm::vec2(angle, len);
-        }
-        
-        int getOscAddressSlot(int label, int maxBlobNum){
-            return label % maxBlobNum + 1;
         }
         
         ofxOscSender sender;
