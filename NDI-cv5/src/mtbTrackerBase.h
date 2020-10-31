@@ -68,22 +68,23 @@ namespace mtb{
         
         bool isNoteOnSent(int label){
             if(noteOnSentMap.count(label) != 0){
-                return noteOnSentMap[label];
+                return noteOnSentMap[label].bSent;
             }else{
                 return false;
             }
         }
         
-        bool needNoteOff(int label, int maxBlobNum){
+        bool needNoteOff(int label){
             
-            int targetSlot = getOscAddressSlot(label, maxBlobNum);            
+            int targetSlot = getOscAddressSlot(label);
             auto itr = noteOnSentMap.begin();
             for(; itr!=noteOnSentMap.end(); ++itr){
                 int sentLabel = itr->first;
-                bool bSent = itr->second;
+                NoteOnInfo & info = itr->second;
+                bool bSent = info.bSent;
                 if(sentLabel == label) continue;
                 if(!bSent) continue;
-                int slot = getOscAddressSlot(sentLabel, maxBlobNum);
+                int slot = getOscAddressSlot(sentLabel);
                 if(targetSlot == slot){
                     // we dont need to send noteOff
                     // since there are still sounding note
@@ -94,22 +95,49 @@ namespace mtb{
         }
         
         // osc wrapper
-        int getOscAddressSlot(int label, int maxBlobNum);
-        int sendNoteOn(int label, int maxBlobNum);
-        int sendNoteOff(int label, int maxBlobNum);
-        int sendVal(int label, int maxBlobNum, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize);
+        int getOscAddressSlot(int label);
+        int sendNoteOn(int label);
+        int sendNoteOff(int label);
+        int sendVal(int label, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize);
         
         //ofxCvContourFinder contourFinder;
         ofxCv::ContourFinder finder;
         //ofxCv::RectTracker tracker;
 
+        struct NoteOnInfo{
+        public:
+            bool bSent;
+            bool bDead;
+            int framesAfterDeath; // -1 if not dead
+            
+            NoteOnInfo(int _bSent=false)
+            :bSent(_bSent),
+            bDead(false),
+            framesAfterDeath(-1){
+            }
+        };
+
         std::vector<cv::Rect> rects;
         std::vector<int> selectedBlobs; // label
-        std::map<int, bool> noteOnSentMap; // lable, noteOnSent
+        std::map<int, NoteOnInfo> noteOnSentMap; // lable, noteOnSent
+        
         
         NDISource * user;
         NDISender senderBlob;
         ofEventListeners listenerHolder;
-        
+
+        // CV::Contor, CV::Tracker
+        ofParameter<float> minArea{ "minArea", 5, 0, 500 };
+        ofParameter<float> maxArea{ "maxArea", 10, 0, 500 };
+        ofParameter<bool> bFindHoles{ "find holes", false };
+        ofParameter<bool> bSimplify{ "simplify", false };
+        ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
+        ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 500 };
+        //ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
+        ofParameter<int> maxBlobCandidate{ "Max blob candidate", 10, 1, 100 };
+        ofParameter<bool> bDrawCandidates{ "Draw Candidates", true};
+        ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
+        ofParameter<int> minAge{ "Min age", 10, 0, 60 };
+        ofParameterGroup grp{ "Tracker", minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, /*blobScale */};
     };
 }

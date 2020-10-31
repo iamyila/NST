@@ -148,13 +148,14 @@ public:
             ofSetColor(255);
             ofSetRectMode(OF_RECTMODE_CENTER);
 			currentImage.draw(ofGetWidth() / 2, ofGetHeight() / 2, v.width, v.height);
-			if(bDetectBlob) tracker.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
             if(bHeatmap) heatmap.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
+            if(bDetectBlob) tracker.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
+            if(bGlitch) glitch.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
 			ofPopStyle();
             
             {
                 ofPushMatrix();
-                ofTranslate(30, 30);
+                ofTranslate(30, 60);
                 ofSetColor(255);
                 ofDrawBitmapString("Selected label : age", 0, -5);
                 tracker.drawInfo();
@@ -163,7 +164,7 @@ public:
                 ofSetColor(255);
                 ofDrawBitmapString("NoteOn sent (label)", 0, -5);
                 ofSetColor(0,255, 0);
-                tracker.drawNoteOnSlots();
+                tracker.drawNoteOnInfo();
                 ofPopMatrix();
             }
         }
@@ -225,7 +226,7 @@ public:
             ofSetColor(255);
             ofDrawBitmapString("NoteOn sent (label)", 0, -5);
             ofSetColor(0,255, 0);
-            tracker.drawNoteOnSlots();
+            tracker.drawNoteOnInfo();
             ofPopMatrix();
             
             ofPopStyle();

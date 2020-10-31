@@ -20,6 +20,8 @@ namespace mtb{
         
         mtbTracker(){
             listenerHolder.push(bgAlgo.newListener([&](int& algo) { changeBG(); }));
+            
+            grp.add(bgGrp);
         }                
 
         void setup(string name, int w, int h, bool ndiOut) override{
@@ -63,22 +65,43 @@ namespace mtb{
 
             finder.findContours(foregroundImage);
             
-            // Process Dead blobs
+            // Process Dead blobs, just mark bDead
             auto & deads = tracker.getDeadLabels();
             auto itrD = deads.begin();
             for(; itrD<deads.end(); ++itrD){
                 int label = *itrD;
-                
-                // did we send NoteOn before?
-                if(isNoteOnSent(label)){
-                    if(needNoteOff(label, maxBlobNum)){
-                        sendNoteOff(label, maxBlobNum);
-                        cout << "NoteOff " << label << endl;
-                    }
-
-                    noteOnSentMap.erase(label);
+                if(noteOnSentMap.count(label) != 0){
+                    noteOnSentMap[label].bDead = true;
+                    noteOnSentMap[label].framesAfterDeath = 0;
                 }
             }
+
+            
+            // dead check
+            vector<int> dels;
+            auto itrM = noteOnSentMap.begin();
+            for(; itrM!=noteOnSentMap.end(); ++itrM){
+                int label = itrM->first;
+                NoteOnInfo & info = itrM->second;
+                bool bSent = info.bSent;
+                bool bDead = info.bDead;
+                
+                if(bSent && bDead){
+                    int afterDeath = info.framesAfterDeath;
+                    if( persistence < afterDeath ){
+                        if(needNoteOff(label)){
+                            sendNoteOff(label);
+                            cout << "NoteOff " << label << endl;
+                        }
+                        dels.push_back(label);
+                    }else{
+                        info.framesAfterDeath++;
+                    }
+                }
+            }
+            
+            for_each(dels.begin(),dels.end(),
+                     [&](const int & label){ noteOnSentMap.erase(label);});
             
             // Copy
             vector<int> prevSelectedBlobs(selectedBlobs);
@@ -125,17 +148,17 @@ namespace mtb{
                 if(noteOnSent == false){
                     int age = tracker.getAge(label);
                     if(minAge <= age){
-                        sendNoteOn(label, maxBlobNum);
+                        sendNoteOn(label);
                         
                         if(noteOnSentMap.count(label) == 0){
-                            noteOnSentMap.insert(make_pair(label, true));
+                            noteOnSentMap.insert(make_pair(label, NoteOnInfo(true)));
                         }else{
-                            noteOnSentMap.at(label) = true;
+                            noteOnSentMap.at(label).bSent = true;
+                            noteOnSentMap.at(label).bDead = false;
+                            noteOnSentMap.at(label).framesAfterDeath = -1;
                         }
                         cout << "NoteOn  " << label << endl;
                     }
-                }else{
-                    // we send osc update val from drawToFbo()
                 }
 
                 if(selectedBlobs.size() >= maxBlobNum) break;
@@ -157,7 +180,7 @@ namespace mtb{
             if(bDrawCandidates){
                 ofPushStyle();
                 ofSetRectMode(OF_RECTMODE_CENTER);
-                ofSetColor(0, 255, 0);
+                ofSetColor(255, 160);
                 ofNoFill();
                 const auto & rects = finder.getBoundingRects();
                 for(int i=0; i<rects.size(); i++){
@@ -178,6 +201,7 @@ namespace mtb{
             
             // Selected
             auto itr = selectedBlobs.begin();
+            int i = 0;
             for(; itr!=selectedBlobs.end(); ++itr){
                 
                 int label = *itr;
@@ -196,11 +220,12 @@ namespace mtb{
                 ofPushStyle();
                 ofPushMatrix();
                 ofSetLineWidth(1);
+                bNoteOnSent ? ofSetColor(255, 0, 0) : ofSetColor(255);
                 ofNoFill();
-                bNoteOnSent ? ofSetColor(255, 0, 0) : ofSetColor(255,200);
                 poly.draw();
                 ofTranslate(center.x, center.y);
                 ofSetRectMode(OF_RECTMODE_CENTER);
+                bNoteOnSent ? ofSetColor(255, 0, 0, 200) : ofSetColor(255,200);
                 ofDrawRectangle(0, 0, rect.width+5, rect.height+4);
                 drawLabelAndAge(label, -rect.width/2-15, rect.height/2+15);
                 ofPopMatrix();
@@ -211,11 +236,27 @@ namespace mtb{
                     glm::vec2 vel = ofxCv::toOf(tracker.getVelocityFromLabel(label));
                     glm::vec2 xyrate(center.x/receiverW, center.y/receiverH);
                     glm::vec2 inputSize(receiverW, receiverH);
-                    sendVal(label, maxBlobNum, vel, area, age, center, inputSize);
+                    sendVal(label, vel, area, age, center, inputSize);
                 }
                 
                 // Heatmap
                 addPointToHeatmap(center.x/receiverW, center.y/receiverH, area);
+                
+                if(i==0){
+                    float speed = 0.90;
+                    float speed2 = 1.0 - speed;
+                    targetRect.set(rect.x, rect.y, rect.width, rect.height);
+                    currentRect.x = currentRect.x*speed + targetRect.x * speed2;
+                    currentRect.y = currentRect.y*speed + targetRect.y * speed2;
+                    currentRect.width = currentRect.width*speed + targetRect.width * speed2;
+                    currentRect.height = currentRect.height*speed + targetRect.height * speed2;
+                    
+                    ofNoFill();
+                    ofSetColor(100,0, 200, 200);
+                    ofDrawRectangle(currentRect);
+                }
+                
+                i++;
             }
             
             ofPopMatrix();
@@ -226,16 +267,25 @@ namespace mtb{
             foregroundImage.draw(x, y, w, h);
         }
 
-        void drawNoteOnSlots(){
+        void drawNoteOnInfo(){
             auto itr = noteOnSentMap.begin();
             int i = 0;
             for(; itr!=noteOnSentMap.end(); ++itr){
                 int label = itr->first;
-                bool sent = itr->second;
-                if(sent){
-                    char c[255];
-                    sprintf(c, "%2i", label);                    
-                    ofDrawBitmapString(c, 0, 10+i*15);
+                NoteOnInfo & info = itr->second;
+                if(info.bSent){
+                
+                    stringstream ss;
+                    ss << label;
+                    if(info.bDead){
+                        ss << " DEAD ";
+                        ss << info.framesAfterDeath;
+                        ofSetColor(255, 0, 0);
+                    }else{
+                        ofSetColor(0, 255, 0);
+                    }
+                    
+                    ofDrawBitmapString(ss.str(), 0, 10+i*15);
                     i++;
                 }
             }
@@ -250,20 +300,11 @@ namespace mtb{
         
         ofParameter<int> bgAlgo{"Background Subtractor Algo", 1, 0, 1};
         ofParameter<float> blurAmt{ "Blur amount", 3, 0, 20 };
+        ofParameterGroup bgGrp{"BG", bgAlgo, blurAmt};
 
-        // CV::Contor, CV::Tracker
-        ofParameter<float> minArea{ "minArea", 5, 0, 500 };
-        ofParameter<float> maxArea{ "maxArea", 10, 0, 500 };
-        ofParameter<bool> bFindHoles{ "find holes", false };
-        ofParameter<bool> bSimplify{ "simplify", false };
-        ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
-        ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 500 };
-        //ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
-        ofParameter<int> maxBlobCandidate{ "Max blob candidate", 10, 1, 100 };
-        ofParameter<bool> bDrawCandidates{ "Draw Candidates", true};
-        ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
-        ofParameter<int> minAge{ "Min age", 10, 0, 60 };
-        ofParameterGroup grp{ "Tracker", bgAlgo, blurAmt, minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, /*blobScale */};
+        
+        ofRectangle targetRect;
+        ofRectangle currentRect;
     };
     
 }

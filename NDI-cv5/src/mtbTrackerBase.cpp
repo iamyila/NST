@@ -11,7 +11,7 @@ namespace mtb{
         user = s;
     }
     
-    int mtbTrackerBase::getOscAddressSlot(int label, int maxBlobNum){
+    int mtbTrackerBase::getOscAddressSlot(int label){
         return user->oscSender.getOscAddressSlot(label, maxBlobNum);
     }
     
@@ -19,15 +19,15 @@ namespace mtb{
         user->addPointToHeatmap(x, y, area);
     }
     
-    int mtbTrackerBase::sendNoteOn(int label, int maxBlobNum){
+    int mtbTrackerBase::sendNoteOn(int label){
         return user->oscSender.sendNoteOn(label, maxBlobNum);        
     }
 
-    int mtbTrackerBase::sendNoteOff(int label, int maxBlobNum){
+    int mtbTrackerBase::sendNoteOff(int label){
         return user->oscSender.sendNoteOff(label, maxBlobNum);
     }
     
-    int mtbTrackerBase::sendVal(int label, int maxBlobNum, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
+    int mtbTrackerBase::sendVal(int label, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
         return user->oscSender.sendVal(label, maxBlobNum, vel, area, age, center, inputSize);
     }
     
