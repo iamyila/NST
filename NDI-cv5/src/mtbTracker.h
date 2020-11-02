@@ -214,7 +214,20 @@ namespace mtb{
 
                 // this index might not be really reliable,
                 // so only for drawing perpose
-                int index = tracker.getIndexFromLabel(label);
+                //int index = tracker.getIndexFromLabel(label);
+                int index = -1;
+                auto & curs = tracker.getCurrentLabels();
+                for(int j=0; j<curs.size(); j++){
+                    if(label == curs[j]){
+                        index = j;
+                        break;
+                    }
+                }
+                
+                if(index == -1){
+                    continue;
+                }
+                
                 ofPolyline & poly = finder.getPolyline(index);
                 
                 ofPushStyle();
