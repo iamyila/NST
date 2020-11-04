@@ -98,14 +98,14 @@ public:
 			ofPixels& pix = receiver.getPixels();
 			pix.setImageType(OF_IMAGE_COLOR);
 			currentImage.setFromPixels(pix);
-        }
 
-        if (bDetectBlob) {
-            tracker.update(currentImage);
+            if (bDetectBlob) {
+                tracker.update(currentImage);
+            }
+            
+            drawFbo();
         }
-        
-        drawFbo();
-    }       
+    }
   
     void drawFbo(){
 		if (!ndiIn) return;
@@ -155,7 +155,7 @@ public:
             
             {
                 ofPushMatrix();
-                ofTranslate(30, 60);
+                ofTranslate(30, 80);
                 ofSetColor(255);
                 ofDrawBitmapString("Selected label : age", 0, -5);
                 tracker.drawInfo();
