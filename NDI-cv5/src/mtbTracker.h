@@ -57,6 +57,7 @@ namespace mtb{
             finder.setMaxArea(maxArea*maxArea);
             finder.setSimplify(bSimplify);
             finder.setFindHoles(bFindHoles);
+            finder.setSortBySize(false);
 
             ofxCv::RectTracker & tracker = finder.getTracker();
             //tracker.setSmoothingRate(smoothingRate);
