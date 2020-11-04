@@ -253,22 +253,7 @@ namespace mtb{
                 }
                 
                 // Heatmap
-                addPointToHeatmap(center.x/receiverW, center.y/receiverH, area);
-                
-                if(i==0){
-                    float speed = 0.90;
-                    float speed2 = 1.0 - speed;
-                    targetRect.set(rect.x, rect.y, rect.width, rect.height);
-                    currentRect.x = currentRect.x*speed + targetRect.x * speed2;
-                    currentRect.y = currentRect.y*speed + targetRect.y * speed2;
-                    currentRect.width = currentRect.width*speed + targetRect.width * speed2;
-                    currentRect.height = currentRect.height*speed + targetRect.height * speed2;
-                    
-                    ofNoFill();
-                    ofSetColor(100,0, 200, 200);
-                    ofDrawRectangle(currentRect);
-                }
-                
+                addPointToHeatmap(center.x/receiverW, center.y/receiverH, area);                                
                 i++;
             }
             
@@ -314,10 +299,7 @@ namespace mtb{
         ofParameter<int> bgAlgo{"Background Subtractor Algo", 1, 0, 1};
         ofParameter<float> blurAmt{ "Blur amount", 3, 0, 20 };
         ofParameterGroup bgGrp{"BG", bgAlgo, blurAmt};
-
         
-        ofRectangle targetRect;
-        ofRectangle currentRect;
     };
     
 }
