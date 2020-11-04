@@ -29,9 +29,11 @@ public:
 
         int w = processWidth;
         int h = processHeight;
-
-        currentImage.clear();
-        currentImage.allocate(w,h);
+        
+        inImg.allocate(w, h, OF_IMAGE_COLOR);
+        
+        //currentImage.clear();
+        //currentImage.allocate(w,h);
         setupAll();
                 
         tracker.registerUser(this);
@@ -96,11 +98,14 @@ public:
 
 		if (receiver.update()) {
 			ofPixels& pix = receiver.getPixels();
-			pix.setImageType(OF_IMAGE_COLOR);
-            currentImage.setFromPixels(pix);
+			//pix.setImageType(OF_IMAGE_COLOR);
+            //currentImage.setFromPixels(pix);
             
+            inImg.setFromPixels(pix);
+            matRGBA = ofxCv::toCv(inImg);
+            cv::cvtColor(matRGBA, matRGB, cv::COLOR_RGBA2RGB);
             if (bDetectBlob) {
-                tracker.update(currentImage);
+                tracker.update(matRGB);
             }
             
             drawFbo();
@@ -127,7 +132,8 @@ public:
             glitch.beginTarget();
             int w = glitch.targetFbo.getWidth();
             int h = glitch.targetFbo.getHeight();
-            currentImage.draw(0,0,w,h);
+            //currentImage.draw(0,0,w,h);
+            inImg.draw(0,0,w,h);
             if(bDetectBlob) tracker.drawFbo(0,0,w,h);
             if(bHeatmap) heatmap.drawFbo(0,0,w,h);
             glitch.endTarget();
@@ -147,7 +153,7 @@ public:
 			ofEnableAlphaBlending();
             ofSetColor(255);
             ofSetRectMode(OF_RECTMODE_CENTER);
-			currentImage.draw(ofGetWidth() / 2, ofGetHeight() / 2, v.width, v.height);
+			inImg.draw(ofGetWidth() / 2, ofGetHeight() / 2, v.width, v.height);
             if(bHeatmap) heatmap.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
             if(bDetectBlob) tracker.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
             if(bGlitch) glitch.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
@@ -155,7 +161,11 @@ public:
             
             {
                 ofPushMatrix();
-                ofTranslate(30, 80);
+                ofTranslate(30, 50);
+                ofSetColor(255);
+                ofDrawBitmapStringHighlight("fps: " + ofToString(ofGetFrameRate(), 1), 0, -5);
+                
+                ofTranslate(0, 30);
                 ofSetColor(255);
                 ofDrawBitmapString("Selected label : age", 0, -5);
                 tracker.drawInfo();
@@ -185,7 +195,7 @@ public:
             ofSetColor(255);
             
             // 1
-            currentImage.draw(0,ty,w,h);
+            inImg.draw(0,ty,w,h);
 
             if(bDetectBlob){
                 // 2
@@ -266,6 +276,9 @@ public:
     }
     
 public:
+
+    ofImage inImg;
+
     mtb::mtbTracker tracker;
     mtb::mtbHeatmap heatmap;
     mtb::mtbGlitch glitch;
@@ -275,8 +288,10 @@ public:
     
     // NDI receive
     NDIReceiver receiver;
-    ofxCvColorImage currentImage;
-
+    //ofxCvColorImage currentImage;
+    cv::Mat matRGBA;
+    cv::Mat matRGB;
+    
     // General
     ofParameter<string> NDI_name{"Name", "sender1"};
     ofParameter<bool> ndiIn{"NDI IN",false};

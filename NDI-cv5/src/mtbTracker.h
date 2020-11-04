@@ -42,7 +42,10 @@ namespace mtb{
         }
         
         void update(ofxCvColorImage & currentImage) override{
-            currentMat = ofxCv::toCv(currentImage);
+        }
+        
+        void update(cv::Mat & currentMat) {
+            //currentMat = ofxCv::toCv(currentImage);
             foregroundMat = ofxCv::toCv(foregroundImageOf);
             pBackSub->apply(currentMat, foregroundMat);
             if(0<blurAmt) ofxCv::blur(foregroundMat, foregroundMat, blurAmt);
@@ -306,7 +309,8 @@ namespace mtb{
         
         // cv::BackgroundSubtractor
         cv::Ptr<cv::BackgroundSubtractor> pBackSub;
-        cv::Mat currentMat, foregroundMat;
+        //cv::Mat currentMat;
+        cv::Mat foregroundMat;
         
         ofParameter<int> bgAlgo{"Background Subtractor Algo", 1, 0, 1};
         ofParameter<float> blurAmt{ "Blur amount", 3, 0, 20 };
