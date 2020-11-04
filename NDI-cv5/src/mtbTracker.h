@@ -240,7 +240,7 @@ namespace mtb{
                     poly.draw();
                     ofTranslate(center.x, center.y);
                     ofSetRectMode(OF_RECTMODE_CENTER);
-                     ? ofSetColor(255, 0, 0, 200) : ofSetColor(255,200);
+                    ofSetColor(255, 0, 0);
                     ofDrawRectangle(0, 0, rect.width+5, rect.height+4);
                     drawLabelAndAge(label, -rect.width/2-15, rect.height/2+15);
                     ofPopMatrix();
