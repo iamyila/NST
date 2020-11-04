@@ -208,53 +208,53 @@ namespace mtb{
                 int label = *itr;
                 bool bNoteOnSent = isNoteOnSent(label);
 
-                int age = tracker.getAge(label);
-                const cv::Rect& rect = tracker.getCurrent(label);
-                glm::vec2 center(rect.x+rect.width/2, rect.y+rect.height/2);
-                float area = (rect.width * rect.height) / (receiverW*receiverH);
-
-                // this index might not be really reliable,
-                // so only for drawing perpose
-                int index = tracker.getIndexFromLabel(label);
-                ofPolyline & poly = finder.getPolyline(index);
-                
-                ofPushStyle();
-                ofPushMatrix();
-                ofSetLineWidth(1);
-                bNoteOnSent ? ofSetColor(255, 0, 0) : ofSetColor(255);
-                ofNoFill();
-                poly.draw();
-                ofTranslate(center.x, center.y);
-                ofSetRectMode(OF_RECTMODE_CENTER);
-                bNoteOnSent ? ofSetColor(255, 0, 0, 200) : ofSetColor(255,200);
-                ofDrawRectangle(0, 0, rect.width+5, rect.height+4);
-                drawLabelAndAge(label, -rect.width/2-15, rect.height/2+15);
-                ofPopMatrix();
-                ofPopStyle();
-                
-                // osc
                 if(bNoteOnSent){
+
+                    // this index might not be really reliable,
+                    // so only for drawing perpose
+                    //int index = tracker.getIndexFromLabel(label);
+                    int index = -1;
+                    auto & curs = tracker.getCurrentLabels();
+                    for(int j=0; j<curs.size(); j++){
+                        if(label == curs[j]){
+                            index = j;
+                            break;
+                        }
+                    }
+                    
+                    if(index == -1){
+                        continue;
+                    }
+                
+                    int age = tracker.getAge(label);
+                    const cv::Rect& rect = tracker.getCurrent(label);
+                    glm::vec2 center(rect.x+rect.width/2, rect.y+rect.height/2);
+                    float area = (rect.width * rect.height) / (receiverW*receiverH);
+
+                    ofPolyline & poly = finder.getPolyline(index);
+                    
+                    ofPushStyle();
+                    ofPushMatrix();
+                    ofSetLineWidth(1);
+                    ofSetColor(255, 0, 0);
+                    ofNoFill();
+                    poly.draw();
+                    ofTranslate(center.x, center.y);
+                    ofSetRectMode(OF_RECTMODE_CENTER);
+                    ofSetColor(255, 0, 0);
+                    ofDrawRectangle(0, 0, rect.width+5, rect.height+4);
+                    drawLabelAndAge(label, -rect.width/2-15, rect.height/2+15);
+                    ofPopMatrix();
+                    ofPopStyle();
+                
+                    // osc
                     glm::vec2 vel = ofxCv::toOf(tracker.getVelocityFromLabel(label));
                     glm::vec2 xyrate(center.x/receiverW, center.y/receiverH);
                     glm::vec2 inputSize(receiverW, receiverH);
                     sendVal(label, vel, area, age, center, inputSize);
-                }
-                
-                // Heatmap
-                addPointToHeatmap(center.x/receiverW, center.y/receiverH, area);
-                
-                if(i==0){
-                    float speed = 0.90;
-                    float speed2 = 1.0 - speed;
-                    targetRect.set(rect.x, rect.y, rect.width, rect.height);
-                    currentRect.x = currentRect.x*speed + targetRect.x * speed2;
-                    currentRect.y = currentRect.y*speed + targetRect.y * speed2;
-                    currentRect.width = currentRect.width*speed + targetRect.width * speed2;
-                    currentRect.height = currentRect.height*speed + targetRect.height * speed2;
-                    
-                    ofNoFill();
-                    ofSetColor(100,0, 200, 200);
-                    ofDrawRectangle(currentRect);
+
+                    // Heatmap
+                    addPointToHeatmap(center.x/receiverW, center.y/receiverH, area);
                 }
                 
                 i++;
@@ -302,10 +302,7 @@ namespace mtb{
         ofParameter<int> bgAlgo{"Background Subtractor Algo", 1, 0, 1};
         ofParameter<float> blurAmt{ "Blur amount", 3, 0, 20 };
         ofParameterGroup bgGrp{"BG", bgAlgo, blurAmt};
-
         
-        ofRectangle targetRect;
-        ofRectangle currentRect;
     };
     
 }
