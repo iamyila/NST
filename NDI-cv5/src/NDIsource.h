@@ -97,8 +97,8 @@ public:
 		if (receiver.update()) {
 			ofPixels& pix = receiver.getPixels();
 			pix.setImageType(OF_IMAGE_COLOR);
-			currentImage.setFromPixels(pix);
-
+            currentImage.setFromPixels(pix);
+            
             if (bDetectBlob) {
                 tracker.update(currentImage);
             }

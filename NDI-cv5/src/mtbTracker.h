@@ -26,8 +26,8 @@ namespace mtb{
 
         void setup(string name, int w, int h, bool ndiOut) override{
             
-            foregroundImage.clear();
-            foregroundImage.allocate(w,h);
+            foregroundImageOf.clear();
+            foregroundImageOf.allocate(w,h, OF_IMAGE_GRAYSCALE);
             senderBlob.setup(name, w, h, ndiOut);
             changeBG();
         }
@@ -43,15 +43,19 @@ namespace mtb{
         
         void update(ofxCvColorImage & currentImage) override{
             currentMat = ofxCv::toCv(currentImage);
+            foregroundMat = ofxCv::toCv(foregroundImageOf);
             pBackSub->apply(currentMat, foregroundMat);
-            ofxCv::toOf(foregroundMat, foregroundPix);
-            foregroundImage.setFromPixels(foregroundPix);
-            if(0<blurAmt) foregroundImage.blur(blurAmt*2+1);
+            if(0<blurAmt) ofxCv::blur(foregroundMat, foregroundMat, blurAmt);
+
+            if(bDrawReferenceImage){
+                foregroundImageOf.update();
+            }
+
             findContour();
         }
         
         void findContour() override{
-            if(!foregroundImage.bAllocated) return;
+            if(!foregroundImageOf.isAllocated()) return;
             
             finder.setMinArea(minArea*minArea);
             finder.setMaxArea(maxArea*maxArea);
@@ -64,7 +68,8 @@ namespace mtb{
             tracker.setMaximumDistance(maxDistance);
             tracker.setPersistence(persistence);
 
-            finder.findContours(foregroundImage);
+            //finder.findContours(foregroundImage);
+            finder.findContours(foregroundMat);
             
             // Process Dead blobs, just mark bDead
             auto & deads = tracker.getDeadLabels();
@@ -265,7 +270,11 @@ namespace mtb{
         }
         
         void drawReference(int x, int y, int w, int h) override{
-            foregroundImage.draw(x, y, w, h);
+            //foregroundImage.draw(x, y, w, h);
+            //foregroundMat.draw(x, y, w, h);
+            if(bDrawReferenceImage){
+                foregroundImageOf.draw(x, y, w, h);
+            }
         }
 
         void drawNoteOnInfo(){
@@ -292,8 +301,8 @@ namespace mtb{
             }
         }
     
-        ofPixels foregroundPix;
-        ofxCvGrayscaleImage foregroundImage;
+        //ofPixels foregroundPix;
+        ofImage foregroundImageOf;
         
         // cv::BackgroundSubtractor
         cv::Ptr<cv::BackgroundSubtractor> pBackSub;
@@ -301,7 +310,8 @@ namespace mtb{
         
         ofParameter<int> bgAlgo{"Background Subtractor Algo", 1, 0, 1};
         ofParameter<float> blurAmt{ "Blur amount", 3, 0, 20 };
-        ofParameterGroup bgGrp{"BG", bgAlgo, blurAmt};
+        ofParameter<bool> bDrawReferenceImage{ "Draw Reference Image", false };
+        ofParameterGroup bgGrp{"BG", bgAlgo, blurAmt, bDrawReferenceImage};
         
     };
     
