@@ -131,7 +131,7 @@ namespace mtb{
         ofParameter<float> maxArea{ "maxArea", 10, 0, 500 };
         ofParameter<bool> bFindHoles{ "find holes", false };
         ofParameter<bool> bSimplify{ "simplify", false };
-        ofParameter<int> persistence{ "persistence (frames)", 15, 1, 60 };
+        ofParameter<int> persistence{ "persistence (frames)", 15, 0, 60 };
         ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 500 };
         //ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
         ofParameter<int> maxBlobCandidate{ "Max blob candidate", 10, 1, 100 };
