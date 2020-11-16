@@ -9,6 +9,7 @@
 #include "NDISender.h"        // my own helper class
 #include "ofxOpenCv.h"
 #include "ofxCv.h"
+#include "OscSender.h"
 
 class NDISource;
 
@@ -74,44 +75,7 @@ namespace mtb{
             //finder.findContours(foregroundImage);
             finder.findContours(foregroundMat);
             
-            // Process Dead blobs, just mark bDead
-            auto & deads = tracker.getDeadLabels();
-            auto itrD = deads.begin();
-            for(; itrD<deads.end(); ++itrD){
-                int label = *itrD;
-                if(noteOnSentMap.count(label) != 0){
-                    noteOnSentMap[label].bDead = true;
-                    noteOnSentMap[label].framesAfterDeath = 0;
-                }
-            }
 
-            
-            // dead check
-            vector<int> dels;
-            auto itrM = noteOnSentMap.begin();
-            for(; itrM!=noteOnSentMap.end(); ++itrM){
-                int label = itrM->first;
-                NoteOnInfo & info = itrM->second;
-                bool bSent = info.bSent;
-                bool bDead = info.bDead;
-                
-                if(bSent && bDead){
-                    int afterDeath = info.framesAfterDeath;
-                    if( persistence < afterDeath ){
-                        if(needNoteOff(label)){
-                            sendNoteOff(label);
-                            cout << "NoteOff " << label << endl;
-                        }
-                        dels.push_back(label);
-                    }else{
-                        info.framesAfterDeath++;
-                    }
-                }
-            }
-            
-            for_each(dels.begin(),dels.end(),
-                     [&](const int & label){ noteOnSentMap.erase(label);});
-            
             // Copy
             vector<int> prevSelectedBlobs(selectedBlobs);
             selectedBlobs.clear();
@@ -149,6 +113,8 @@ namespace mtb{
 //                }
 //            }
 
+            vector<int> noteOnSendInThisLoop;
+            
             for(; itrC!=currs.end(); ++itrC){
                 int label = *itrC;
                 selectedBlobs.push_back(label);
@@ -167,11 +133,63 @@ namespace mtb{
                             noteOnSentMap.at(label).framesAfterDeath = -1;
                         }
                         cout << "NoteOn  " << label << endl;
+                        
+                        noteOnSendInThisLoop.push_back(label);
                     }
                 }
 
                 if(selectedBlobs.size() >= maxBlobNum) break;
             }
+            
+            // Process Dead blobs, just mark bDead
+            auto & deads = tracker.getDeadLabels();
+            auto itrD = deads.begin();
+            for(; itrD<deads.end(); ++itrD){
+                int label = *itrD;
+                if(noteOnSentMap.count(label) != 0){
+                    noteOnSentMap[label].bDead = true;
+                    noteOnSentMap[label].framesAfterDeath = 0;
+                }
+            }
+            
+            
+            // dead check
+            vector<int> dels;
+            auto itrM = noteOnSentMap.begin();
+            for(; itrM!=noteOnSentMap.end(); ++itrM){
+                int label = itrM->first;
+
+                // Do not send noteOff, if we send noteOn already
+                int slot = OscSender::getOscAddressSlot(label, maxBlobNum);
+                for(int i=0; i<noteOnSendInThisLoop.size(); i++){
+                    int sentSlot = OscSender::getOscAddressSlot(noteOnSendInThisLoop[i], maxBlobNum);
+                    if(sentSlot == slot){
+                        continue;
+                    }
+                }
+                
+                NoteOnInfo & info = itrM->second;
+                bool bSent = info.bSent;
+                bool bDead = info.bDead;
+                
+                if(bSent && bDead){
+                    int afterDeath = info.framesAfterDeath;
+                    if( persistence <= afterDeath ){
+                        if(needNoteOff(label)){
+                            
+                            sendNoteOff(label);
+                            cout << "NoteOff " << label << endl;
+                        }
+                        dels.push_back(label);
+                    }else{
+                        info.framesAfterDeath++;
+                    }
+                }
+            }
+            
+            for_each(dels.begin(),dels.end(),
+                     [&](const int & label){ noteOnSentMap.erase(label);});
+            
         }
 
         void drawToFbo(float receiverW, float receiverH, float processW, float processH) override{
@@ -316,7 +334,6 @@ namespace mtb{
         ofParameter<float> blurAmt{ "Blur amount", 3, 0, 20 };
         ofParameter<bool> bDrawReferenceImage{ "Draw Reference Image", false };
         ofParameterGroup bgGrp{"BG", bgAlgo, blurAmt, bDrawReferenceImage};
-        
     };
     
 }

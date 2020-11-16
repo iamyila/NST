@@ -60,9 +60,7 @@ namespace mtb{
             return slot;
         }
         
-        int getOscAddressSlot(int label, int maxBlobNum){
-            return label % maxBlobNum + 1;
-        }
+        static int getOscAddressSlot(int label, int maxBlobNum);
         
     private:
         glm::vec2 toPolar(float x, float y, float w, float h){
