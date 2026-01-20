@@ -157,3 +157,7 @@ Desktop.ini
 
 config.make
 Makefile
+
+of.entitlements
+
+*.xcodeproj
