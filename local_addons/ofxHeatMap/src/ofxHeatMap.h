@@ -198,11 +198,15 @@ public:
     
     ofxHeatMap & operator=(const ofxHeatMap &mom)
     {
-        mHeatMap = mom.mHeatMap;
-        mColorScheme = mom.mColorScheme;
-        mStamp = mom.mStamp;
-        mHeatMapImg = mom.mHeatMapImg;
-        mRadius = mom.mRadius;
+        if (this == &mom) return *this;
+
+        mHeatMap       = mom.mHeatMap;
+        mColorScheme   = mom.mColorScheme;
+        mStamp         = mom.mStamp;
+        mHeatMapImg    = mom.mHeatMapImg;
+        mRadius        = mom.mRadius;
+
+        return *this;
     }
     
     ~ofxHeatMap()
