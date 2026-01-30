@@ -80,8 +80,8 @@ jobs:
           echo "addons.make contents:"
           cat "$PROJECT_PATH/addons.make" || true
 
-          # Run with simple arguments and timeout
-          timeout 120 "$PG_PATH" -o"$HOME/openFrameworks" "$PROJECT_PATH"
+          # Run with platform specified
+          "$PG_PATH" -o"$HOME/openFrameworks" -p"osx" "$PROJECT_PATH"
 
       - name: Build with xcodebuild
         run: |
