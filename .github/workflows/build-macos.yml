@@ -60,7 +60,7 @@ jobs:
 
           # ProjectGenerator is included in the OF release
           PG_APP="projectGenerator/projectGenerator.app"
-          PG_PATH="$PG_APP/Contents/MacOS/projectGenerator"
+          PG_PATH="$PG_APP/Contents/Resources/app/app/projectGenerator"
 
           # Workaround for GateKeeper: move app out and back to clear quarantine
           mv "$PG_APP" /tmp/
