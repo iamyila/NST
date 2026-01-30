@@ -141,24 +141,27 @@ jobs:
           # Copy the app to release directory
           cp -r "$APP_PATH" "$RELEASE_DIR/"
 
-          # Create the zip
+          # Create the zip (sanitize ref name - replace / with -)
           cd "$RELEASE_DIR"
-          ZIP_NAME="${{ env.PROJECT }}-macOS-${{ github.ref_name }}.zip"
+          REF_NAME=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          ZIP_NAME="${{ env.PROJECT }}-macOS-${REF_NAME}.zip"
 
           # Use ditto for better macOS compatibility (preserves extended attributes)
           ditto -c -k --keepParent "$APP_NAME.app" "$ZIP_NAME"
 
           echo "Created: $ZIP_NAME"
-          ls -la "$ZIP_NAME"
+          ls -la
 
           # Move zip to workspace for upload
           mv "$ZIP_NAME" ${{ github.workspace }}/
+          echo "Files in workspace:"
+          ls -la ${{ github.workspace }}/*.zip || true
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PROJECT }}-macOS
-          path: ${{ env.PROJECT }}-macOS-*.zip
+          path: "*.zip"
           retention-days: 30
 
   release:
