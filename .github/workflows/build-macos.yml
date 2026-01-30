@@ -70,12 +70,18 @@ jobs:
           xattr -dr com.apple.quarantine "$PG_APP" 2>/dev/null || true
 
           echo "Using ProjectGenerator at: $PG_PATH"
+          echo "ProjectGenerator version/help:"
+          "$PG_PATH" --help || true
 
           # Generate/Update project
           PROJECT_PATH="$HOME/openFrameworks/apps/NST/${{ env.PROJECT }}"
 
           echo "Generating project at: $PROJECT_PATH"
-          "$PG_PATH" --recursive --ofPath="$HOME/openFrameworks" "$PROJECT_PATH"
+          echo "addons.make contents:"
+          cat "$PROJECT_PATH/addons.make" || true
+
+          # Run with simple arguments and timeout
+          timeout 120 "$PG_PATH" -o"$HOME/openFrameworks" "$PROJECT_PATH"
 
       - name: Build with xcodebuild
         run: |
