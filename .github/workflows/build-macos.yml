@@ -8,28 +8,15 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
-    inputs:
-      project:
-        description: 'Project to build'
-        required: true
-        default: 'NDI-cv5'
-        type: choice
-        options:
-          - NDI-cv
-          - NDI-cv5
-          - NDI-cv6
 
 env:
   OF_VERSION: "0.12.0"
   OF_URL: "https://github.com/openframeworks/openFrameworks/releases/download/0.12.0/of_v0.12.0_osx_release.zip"
+  PROJECT: "NDI-cv5"
 
 jobs:
   build:
     runs-on: macos-14
-
-    strategy:
-      matrix:
-        project: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.project)) || fromJSON('["NDI-cv5"]') }}
 
     steps:
       - name: Checkout repository
@@ -60,14 +47,12 @@ jobs:
 
       - name: Setup project structure
         run: |
-          # Create the apps directory structure that openFrameworks expects
-          mkdir -p ~/openFrameworks/apps/myApps
-
           # Link our project into the openFrameworks apps structure
-          ln -s ${{ github.workspace }} ~/openFrameworks/apps/myApps/NST
+          # Structure: ~/openFrameworks/apps/NST/NDI-cv5
+          ln -s ${{ github.workspace }} ~/openFrameworks/apps/NST
 
           echo "Project structure:"
-          ls -la ~/openFrameworks/apps/myApps/
+          ls -la ~/openFrameworks/apps/NST/
 
       - name: Run ProjectGenerator
         run: |
@@ -87,14 +72,14 @@ jobs:
           echo "Using ProjectGenerator at: $PG_PATH"
 
           # Generate/Update project
-          PROJECT_PATH="$HOME/openFrameworks/apps/myApps/NST/${{ matrix.project }}"
+          PROJECT_PATH="$HOME/openFrameworks/apps/NST/${{ env.PROJECT }}"
 
           echo "Generating project at: $PROJECT_PATH"
           "$PG_PATH" --recursive --ofPath="$HOME/openFrameworks" "$PROJECT_PATH"
 
       - name: Build with xcodebuild
         run: |
-          cd ~/openFrameworks/apps/myApps/NST/${{ matrix.project }}
+          cd ~/openFrameworks/apps/NST/${{ env.PROJECT }}
 
           # Find the xcodeproj
           XCODEPROJ=$(find . -maxdepth 1 -name "*.xcodeproj" | head -1)
@@ -103,7 +88,7 @@ jobs:
           # Build Release configuration
           xcodebuild \
             -project "$XCODEPROJ" \
-            -scheme "${{ matrix.project }}" \
+            -scheme "${{ env.PROJECT }}" \
             -configuration Release \
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="-" \
@@ -114,7 +99,7 @@ jobs:
 
       - name: Ad-hoc code sign
         run: |
-          cd ~/openFrameworks/apps/myApps/NST/${{ matrix.project }}
+          cd ~/openFrameworks/apps/NST/${{ env.PROJECT }}
 
           # Find the built app
           APP_PATH=$(find bin -name "*.app" -type d | head -1)
@@ -143,7 +128,7 @@ jobs:
 
       - name: Create release package
         run: |
-          cd ~/openFrameworks/apps/myApps/NST/${{ matrix.project }}
+          cd ~/openFrameworks/apps/NST/${{ env.PROJECT }}
 
           APP_PATH=$(find bin -name "*.app" -type d | head -1)
           APP_NAME=$(basename "$APP_PATH" .app)
@@ -155,15 +140,9 @@ jobs:
           # Copy the app to release directory
           cp -r "$APP_PATH" "$RELEASE_DIR/"
 
-          # Copy any data files if they exist
-          if [ -d "bin/data" ]; then
-            echo "Including data folder..."
-            # Data is usually inside the app bundle, but copy readme if exists
-          fi
-
           # Create the zip
           cd "$RELEASE_DIR"
-          ZIP_NAME="${{ matrix.project }}-macOS-${{ github.ref_name }}.zip"
+          ZIP_NAME="${{ env.PROJECT }}-macOS-${{ github.ref_name }}.zip"
 
           # Use ditto for better macOS compatibility (preserves extended attributes)
           ditto -c -k --keepParent "$APP_NAME.app" "$ZIP_NAME"
@@ -177,8 +156,8 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.project }}-macOS
-          path: ${{ matrix.project }}-macOS-*.zip
+          name: ${{ env.PROJECT }}-macOS
+          path: ${{ env.PROJECT }}-macOS-*.zip
           retention-days: 30
 
   release:
