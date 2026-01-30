@@ -12,10 +12,11 @@ on:
       project:
         description: 'Project to build'
         required: true
-        default: 'NDI-cv'
+        default: 'NDI-cv5'
         type: choice
         options:
           - NDI-cv
+          - NDI-cv5
           - NDI-cv6
 
 env:
@@ -28,7 +29,7 @@ jobs:
 
     strategy:
       matrix:
-        project: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.project)) || fromJSON('["NDI-cv"]') }}
+        project: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.project)) || fromJSON('["NDI-cv5"]') }}
 
     steps:
       - name: Checkout repository
