@@ -68,39 +68,6 @@ jobs:
           echo "Project structure:"
           ls -la ~/openFrameworks/apps/myApps/
 
-      - name: Copy local addons to openFrameworks
-        run: |
-          echo "Copying local addons..."
-
-          # Copy each local addon to the openFrameworks addons directory
-          for addon in local_addons/*/; do
-            addon_name=$(basename "$addon")
-            echo "Copying $addon_name..."
-            cp -r "$addon" ~/openFrameworks/addons/
-          done
-
-          echo "Available addons:"
-          ls ~/openFrameworks/addons/
-
-      - name: Update addons.make for standard addon paths
-        run: |
-          cd ~/openFrameworks/apps/myApps/NST/${{ matrix.project }}
-
-          # Backup original
-          cp addons.make addons.make.bak
-
-          # Replace ../local_addons/ references with standard addon names
-          # The addons are now in the standard OF addons folder
-          sed -i '' 's|../local_addons/||g' addons.make
-
-          echo "Updated addons.make:"
-          cat addons.make
-
-      - name: Download openFrameworks dependencies
-        run: |
-          cd ~/openFrameworks/scripts/osx
-          ./download_libs.sh
-
       - name: Run ProjectGenerator
         run: |
           cd ~/openFrameworks
