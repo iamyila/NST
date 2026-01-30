@@ -94,7 +94,7 @@ jobs:
           # Build Release configuration
           xcodebuild \
             -project "$XCODEPROJ" \
-            -scheme "${{ env.PROJECT }}" \
+            -scheme "${{ env.PROJECT }} Release" \
             -configuration Release \
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="-" \
