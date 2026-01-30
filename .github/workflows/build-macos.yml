@@ -35,9 +35,10 @@ jobs:
         if: steps.cache-of.outputs.cache-hit != 'true'
         run: |
           echo "Downloading openFrameworks ${{ env.OF_VERSION }}..."
-          curl -L -o of.zip "${{ env.OF_URL }}"
-          unzip -q of.zip -d ~/
+          curl -L -o /tmp/of.zip "${{ env.OF_URL }}"
+          unzip -q /tmp/of.zip -d ~/
           mv ~/of_v${{ env.OF_VERSION }}_osx_release ~/openFrameworks
+          rm /tmp/of.zip
           echo "openFrameworks downloaded to ~/openFrameworks"
 
       - name: Setup project structure
@@ -161,7 +162,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PROJECT }}-macOS
-          path: "*.zip"
+          path: "${{ env.PROJECT }}-macOS-*.zip"
           retention-days: 30
 
   release:
