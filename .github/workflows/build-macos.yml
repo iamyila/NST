@@ -72,20 +72,16 @@ jobs:
         run: |
           cd ~/openFrameworks
 
-          # ProjectGenerator CLI location
-          PG_PATH="projectGenerator-osx/projectGenerator.app/Contents/MacOS/projectGenerator"
+          # ProjectGenerator is included in the OF release
+          PG_APP="projectGenerator/projectGenerator.app"
+          PG_PATH="$PG_APP/Contents/MacOS/projectGenerator"
 
-          if [ ! -f "$PG_PATH" ]; then
-            echo "ProjectGenerator not found at expected location, checking alternatives..."
-            find . -name "projectGenerator*" -type f 2>/dev/null || true
+          # Workaround for GateKeeper: move app out and back to clear quarantine
+          mv "$PG_APP" /tmp/
+          mv /tmp/projectGenerator.app "$PG_APP"
 
-            # Try downloading ProjectGenerator if not included
-            echo "Downloading ProjectGenerator..."
-            PG_URL="https://github.com/openframeworks/projectGenerator/releases/download/0.12.0/projectGenerator-osx.zip"
-            curl -L -o pg.zip "$PG_URL"
-            unzip -q pg.zip -d .
-            PG_PATH="projectGenerator-osx/projectGenerator.app/Contents/MacOS/projectGenerator"
-          fi
+          # Also remove quarantine attribute if present
+          xattr -dr com.apple.quarantine "$PG_APP" 2>/dev/null || true
 
           echo "Using ProjectGenerator at: $PG_PATH"
 
