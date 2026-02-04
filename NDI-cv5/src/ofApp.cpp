@@ -8,20 +8,15 @@ void ofApp::setup(){
 	ofSetWindowPosition(0, 25);
     NDIlib_initialize();
 
-    gui.setup("settings", "settings.json");
-    gui.add(appPrm.grp);
-    gui.add(connectNDIBtn);
-    gui.add(soloMode);
-    listenerHolder.push(connectNDIBtn.newListener([&](void){ connectNDI();}));
-    updateLayout();
-    
     for(int i=0; i<1; i++){
         std::shared_ptr<NDISource> ndi = make_shared<NDISource>();
         ndi->prm.setName("NDI Source " + ofToString(i+1));
-        gui.add(ndi->prm);
         ndis.emplace_back(ndi);
     }
-    
+
+    applyGuiScale(guiScaleEnabled ? ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f) : 1.0f);
+    setupGui();
+    updateLayout();
     gui.loadFromFile("settings.json");
 
     connectNDI();
@@ -125,6 +120,13 @@ void ofApp::draw(){
 }
 
 void ofApp::windowResized(int w, int h){
+    if(guiScaleEnabled){
+        float newScale = ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f);
+        if (fabs(newScale - guiScale) > 0.02f) {
+            applyGuiScale(newScale);
+            setupGui();
+        }
+    }
     updateLayout();
 }
 
@@ -134,6 +136,39 @@ void ofApp::updateLayout(){
     sidebarWidth = ofClamp(ofGetWidth() * 0.28f, minWidth, maxWidth);
     gui.setPosition(10, 20);
     gui.setWidthElements(sidebarWidth - 20.0f);
+}
+
+void ofApp::setupGui(){
+    gui.clear();
+    gui.setup("settings", "settings.json");
+    gui.add(appPrm.grp);
+    gui.add(connectNDIBtn);
+    gui.add(soloMode);
+    gui.add(guiScaleEnabled);
+    for (auto &ndi : ndis) {
+        gui.add(ndi->prm);
+    }
+
+    listenerHolder.unsubscribeAll();
+    listenerHolder.push(connectNDIBtn.newListener([&](void){ connectNDI();}));
+    listenerHolder.push(guiScaleEnabled.newListener([&](bool& b){
+        applyGuiScale(b ? ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f) : 1.0f);
+        setupGui();
+        updateLayout();
+    }));
+}
+
+void ofApp::applyGuiScale(float scale){
+    guiScale = scale;
+    ofxGuiSetDefaultWidth(200.0f * guiScale);
+    ofxGuiSetDefaultHeight(18.0f * guiScale);
+    const int fontSize = static_cast<int>(ofClamp(14.0f * guiScale, 10.0f, 28.0f));
+    const std::string fontPath = "/System/Library/Fonts/Supplemental/Arial.ttf";
+    if (ofFile::doesFileExist(fontPath)) {
+        ofxGuiSetFont(fontPath, fontSize, true, true);
+    } else {
+        ofxGuiSetBitmapFont();
+    }
 }
 
 void ofApp::keyPressed(int key){

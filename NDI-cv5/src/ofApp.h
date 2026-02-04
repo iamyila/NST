@@ -18,6 +18,8 @@ public:
     void windowResized(int w, int h);
     void receiveOsc();
     void updateLayout();
+    void setupGui();
+    void applyGuiScale(float scale);
     
     bool bHide = false;
     vector<std::shared_ptr<NDISource>> ndis;
@@ -27,6 +29,7 @@ public:
 
     ofParameter<void> connectNDIBtn{"Connect NDI"};
     ofParameter<bool> soloMode{"Solo", false};
+    ofParameter<bool> guiScaleEnabled{"Scale GUI", true};
     ofEventListeners listenerHolder;
 
     // this is for receiving Re-consttuctor OSC
@@ -36,4 +39,5 @@ public:
     int oscNumArgs = 0;
 
     float sidebarWidth = 220.0f;
+    float guiScale = 1.0f;
 };
