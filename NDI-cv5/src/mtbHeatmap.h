@@ -59,7 +59,7 @@ namespace mtb{
         int width, height;
         bool bInit = false;
         
-        ofParameter<int> heatColor{ "Color Scheme", 1, 0, heatmap.schemes.size()-1 };
+        ofParameter<int> heatColor{ "Color Scheme", 1, 0, static_cast<int>(heatmap.schemes.size()) - 1 };
         ofParameter<int> heatAlpha{ "Alpha", 200, 0, 255 };
         ofParameter<int> heatSizeMin{ "Size Min %", 1, 1, 20 };
         ofParameter<int> heatSizeMax{ "Size Max %", 5, 1, 20 };

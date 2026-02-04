@@ -293,7 +293,7 @@ public:
     cv::Mat matRGB;
     
     // General
-    ofParameter<string> NDI_name{"Name", "sender1"};
+    ofParameter<string> NDI_name{"Name", "SENDER1"};
     ofParameter<bool> ndiIn{"NDI IN",false};
     ofParameter<bool> ndiOut{"NDI OUT", false};
 	ofParameter<int> processWidth{ "Process Width", 1280, 240, 1920};

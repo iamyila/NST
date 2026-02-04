@@ -44,8 +44,9 @@ public:
 
 		bool found = false;
 		string longName = "";
+		string nameUpper = ofToUpper(name);
 		for (auto& s : sources) {
-			found = ofIsStringInString(s.p_ndi_name, name);
+			found = ofIsStringInString(ofToUpper(s.p_ndi_name), nameUpper);
 			
 			if (found) {
 				longName = s.p_ndi_name;

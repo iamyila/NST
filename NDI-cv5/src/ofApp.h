@@ -15,7 +15,9 @@ public:
 	void draw();
     void connectNDI();
 	void keyPressed(int key);
+    void windowResized(int w, int h);
     void receiveOsc();
+    void updateLayout();
     
     bool bHide = false;
     vector<std::shared_ptr<NDISource>> ndis;
@@ -32,4 +34,6 @@ public:
     
     int hasOscReceived = 0;
     int oscNumArgs = 0;
+
+    float sidebarWidth = 220.0f;
 };

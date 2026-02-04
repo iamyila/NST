@@ -13,8 +13,7 @@ void ofApp::setup(){
     gui.add(connectNDIBtn);
     gui.add(soloMode);
     listenerHolder.push(connectNDIBtn.newListener([&](void){ connectNDI();}));
-    
-    gui.setPosition(10, 20);
+    updateLayout();
     
     for(int i=0; i<1; i++){
         std::shared_ptr<NDISource> ndi = make_shared<NDISource>();
@@ -89,7 +88,7 @@ void ofApp::draw(){
     
     if(!soloMode){
         ofPushMatrix();
-        ofTranslate(220, 20);
+        ofTranslate(sidebarWidth, 20);
         ofSetColor(255);
         
 		int xpos = 0;
@@ -123,6 +122,18 @@ void ofApp::draw(){
         ndis[i]->sendNDI();
     }
 
+}
+
+void ofApp::windowResized(int w, int h){
+    updateLayout();
+}
+
+void ofApp::updateLayout(){
+    const float minWidth = 220.0f;
+    const float maxWidth = 520.0f;
+    sidebarWidth = ofClamp(ofGetWidth() * 0.28f, minWidth, maxWidth);
+    gui.setPosition(10, 20);
+    gui.setWidthElements(sidebarWidth - 20.0f);
 }
 
 void ofApp::keyPressed(int key){
@@ -159,4 +170,3 @@ void ofApp::keyPressed(int key){
 
     }
 }
-
