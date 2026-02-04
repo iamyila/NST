@@ -13,6 +13,7 @@ common:
 osx:
 	ADDON_LIBS = libs/NDI/lib/libndi.dylib
 	ADDON_LDFLAGS = -Wl,-rpath,@executable_path
+	ADDON_AFTER = @APP_PATH="bin/$(BIN_NAME).app/Contents/MacOS"; if [ -d "$$APP_PATH" ]; then cp -f ../local_addons/ofxNDI/libs/NDI/lib/libndi.dylib "$$APP_PATH/"; fi
 vs:
 	# x64
 	ADDON_DLLS_TO_COPY += windows-copy-to-bin/Processing.NDI.Lib.x64.dll
