@@ -1,0 +1,6 @@
+# Build artifacts
+bin/
+obj/
+
+# macOS noise
+.DS_Store
