@@ -14,14 +14,48 @@ void ofApp::setup(){
         ndis.emplace_back(ndi);
     }
 
+    refreshNDISources();
     applyGuiScale(guiScaleEnabled ? ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f) : 1.0f);
     setupGui();
     updateLayout();
     gui.loadFromFile("settings.json");
 
+    refreshNDISources();
+    applySelectedNDISource();
     connectNDI();
     
     oscReceiver.setup(9999);
+}
+
+void ofApp::refreshNDISources(){
+    availableNDISources = ofxNDI::listSources();
+
+    if (availableNDISources.empty()) {
+        ndiSourceIndex.setMin(0);
+        ndiSourceIndex.setMax(0);
+        ndiSourceIndex = 0;
+        ndiSourceName = "(no NDI sources found)";
+        return;
+    }
+
+    const int maxIndex = static_cast<int>(availableNDISources.size()) - 1;
+    ndiSourceIndex.setMin(0);
+    ndiSourceIndex.setMax(maxIndex);
+    ndiSourceIndex = ofClamp(ndiSourceIndex.get(), 0, maxIndex);
+    ndiSourceName = availableNDISources[ndiSourceIndex].p_ndi_name;
+}
+
+void ofApp::applySelectedNDISource(){
+    if (availableNDISources.empty()) {
+        return;
+    }
+
+    const int idx = ofClamp(ndiSourceIndex.get(), 0, static_cast<int>(availableNDISources.size()) - 1);
+    const std::string selected = availableNDISources[idx].p_ndi_name;
+    ndiSourceName = selected;
+    for (auto &ndi : ndis) {
+        ndi->NDI_name = selected;
+    }
 }
 
 void ofApp::connectNDI(){
@@ -142,6 +176,10 @@ void ofApp::setupGui(){
     gui.clear();
     gui.setup("settings", "settings.json");
     gui.add(appPrm.grp);
+    gui.add(refreshSourcesBtn);
+    gui.add(ndiSourceIndex);
+    gui.add(ndiSourceName);
+    gui.add(applySelectedSourceBtn);
     gui.add(connectNDIBtn);
     gui.add(soloMode);
     gui.add(guiScaleEnabled);
@@ -150,6 +188,16 @@ void ofApp::setupGui(){
     }
 
     listenerHolder.unsubscribeAll();
+    listenerHolder.push(refreshSourcesBtn.newListener([&](void){
+        refreshNDISources();
+    }));
+    listenerHolder.push(ndiSourceIndex.newListener([&](int &){
+        applySelectedNDISource();
+    }));
+    listenerHolder.push(applySelectedSourceBtn.newListener([&](void){
+        applySelectedNDISource();
+        connectNDI();
+    }));
     listenerHolder.push(connectNDIBtn.newListener([&](void){ connectNDI();}));
     listenerHolder.push(guiScaleEnabled.newListener([&](bool& b){
         applyGuiScale(b ? ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f) : 1.0f);

@@ -10,10 +10,12 @@
 class ofApp : public ofBaseApp{
 	
 public:
-	void setup();
+    void setup();
 	void update();
 	void draw();
     void connectNDI();
+    void refreshNDISources();
+    void applySelectedNDISource();
 	void keyPressed(int key);
     void windowResized(int w, int h);
     void receiveOsc();
@@ -27,10 +29,15 @@ public:
     ofxPanel gui;
     mtb::AppParam appPrm;
 
+    ofParameter<void> refreshSourcesBtn{"Refresh NDI Sources"};
+    ofParameter<int> ndiSourceIndex{"NDI Source Index", 0, 0, 0};
+    ofParameter<string> ndiSourceName{"Selected NDI Source", ""};
+    ofParameter<void> applySelectedSourceBtn{"Apply Selected Source"};
     ofParameter<void> connectNDIBtn{"Connect NDI"};
     ofParameter<bool> soloMode{"Solo", false};
     ofParameter<bool> guiScaleEnabled{"Scale GUI", true};
     ofEventListeners listenerHolder;
+    std::vector<ofxNDI::Source> availableNDISources;
 
     // this is for receiving Re-consttuctor OSC
     ofxOscReceiver oscReceiver;
