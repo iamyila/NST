@@ -161,3 +161,4 @@ Makefile
 of.entitlements
 
 *.xcodeproj
+local_addons/ofxNDI/libs/NDI/lib/linux
