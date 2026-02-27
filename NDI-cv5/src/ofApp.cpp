@@ -42,7 +42,7 @@ void ofApp::refreshNDISources(){
     ndiSourceIndex.setMin(0);
     ndiSourceIndex.setMax(maxIndex);
     ndiSourceIndex = ofClamp(ndiSourceIndex.get(), 0, maxIndex);
-    ndiSourceName = availableNDISources[ndiSourceIndex].p_ndi_name;
+    ndiSourceName = "[" + ofToString(ndiSourceIndex.get() + 1) + "/" + ofToString(maxIndex + 1) + "] " + availableNDISources[ndiSourceIndex].p_ndi_name;
 }
 
 void ofApp::applySelectedNDISource(){
@@ -52,7 +52,7 @@ void ofApp::applySelectedNDISource(){
 
     const int idx = ofClamp(ndiSourceIndex.get(), 0, static_cast<int>(availableNDISources.size()) - 1);
     const std::string selected = availableNDISources[idx].p_ndi_name;
-    ndiSourceName = selected;
+    ndiSourceName = "[" + ofToString(idx + 1) + "/" + ofToString(availableNDISources.size()) + "] " + selected;
     for (auto &ndi : ndis) {
         ndi->NDI_name = selected;
     }
@@ -177,7 +177,8 @@ void ofApp::setupGui(){
     gui.setup("settings", "settings.json");
     gui.add(appPrm.grp);
     gui.add(refreshSourcesBtn);
-    gui.add(ndiSourceIndex);
+    gui.add(prevSourceBtn);
+    gui.add(nextSourceBtn);
     gui.add(ndiSourceName);
     gui.add(applySelectedSourceBtn);
     gui.add(connectNDIBtn);
@@ -190,6 +191,18 @@ void ofApp::setupGui(){
     listenerHolder.unsubscribeAll();
     listenerHolder.push(refreshSourcesBtn.newListener([&](void){
         refreshNDISources();
+    }));
+    listenerHolder.push(prevSourceBtn.newListener([&](void){
+        if (availableNDISources.empty()) return;
+        const int maxIndex = static_cast<int>(availableNDISources.size()) - 1;
+        ndiSourceIndex = (ndiSourceIndex.get() - 1 + (maxIndex + 1)) % (maxIndex + 1);
+        applySelectedNDISource();
+    }));
+    listenerHolder.push(nextSourceBtn.newListener([&](void){
+        if (availableNDISources.empty()) return;
+        const int maxIndex = static_cast<int>(availableNDISources.size()) - 1;
+        ndiSourceIndex = (ndiSourceIndex.get() + 1) % (maxIndex + 1);
+        applySelectedNDISource();
     }));
     listenerHolder.push(ndiSourceIndex.newListener([&](int &){
         applySelectedNDISource();
