@@ -83,7 +83,7 @@ namespace mtb{
         // OSC sender settings
         ofParameter<string> oscIp{"IP", "localhost"};
         ofParameter<int> oscPort{"port", 12345, 0, 12345};
-        const std::string oscAddressBase = "/NDITracker0";
+        const std::string oscAddressBase = "/NDITracker1";
         ofParameterGroup grp{"OSC send", oscIp, oscPort};
         
         ofEventListeners listenerHolder;

@@ -13,11 +13,11 @@ Orginal code by Sebastian Frisch http://freshmania.at/ - Hiroshi Matabo v5
 
 ### Current OSC naming in NDI-cv5
 - File: `NDI-cv5/src/OscSender.h`
-- OSC base address is hard-wired to: `/NDITracker0`
+- OSC base address is hard-wired to: `/NDITracker1`
 - Per blob slot, app sends:
-  - `/NDITracker0/<slot>/val`
-  - `/NDITracker0/<slot>/on`
-  - `/NDITracker0/<slot>/off`
+  - `/NDITracker1/<slot>/val`
+  - `/NDITracker1/<slot>/on`
+  - `/NDITracker1/<slot>/off`
 - Slot index is 1-based (`1..10`).
 
 ### Required Max parsing chain
@@ -34,7 +34,7 @@ Orginal code by Sebastian Frisch http://freshmania.at/ - Hiroshi Matabo v5
 
 ### Known mismatch that breaks routing
 - Old pattern: `route NDITracker0 ...`
-- Current stream is address-based (`/NDITracker0/...`), so routing must match full parsed OSC addresses.
+- Current stream is address-based (`/NDITracker1/...`), so routing must match full parsed OSC addresses.
 
 ### Practical debug technique
 - First verify packet arrival at `udpreceive`.
