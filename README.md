@@ -40,3 +40,23 @@ Orginal code by Sebastian Frisch http://freshmania.at/ - Hiroshi Matabo v5
 - First verify packet arrival at `udpreceive`.
 - Then verify parsed address/value after `oscparse` and `list trim` (use `print` or message box).
 - Only after parse is correct, route to each encapsulated blob module.
+
+## Tracking Technique Notes (Blob vs YOLO)
+
+### Current state
+- Tracking mode parameter exists in `NDI-cv5/src/mtbTrackerBase.h`:
+  - `Tracking Technique (0 Blob, 1 YOLO)`
+- Runtime dispatch exists in `NDI-cv5/src/mtbTracker.h`.
+- Current behavior:
+  - `0` runs blob tracking (active implementation).
+  - `1` logs a warning once and falls back to blob tracking.
+
+### Decision tree (current)
+- `trackingTechnique == 0`:
+  - Process contours -> select blobs -> send OSC on/off/val.
+- `trackingTechnique == 1`:
+  - Enter YOLO placeholder branch -> fallback to blob path.
+
+### Integration point for future YOLO work
+- Add YOLO detector/tracker in `NDI-cv5/src/mtbTracker.h` where the YOLO placeholder branch currently lives.
+- Keep OSC emitter (`NDI-cv5/src/OscSender.h`) unchanged so Max mappings remain stable.
