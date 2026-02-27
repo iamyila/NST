@@ -9,11 +9,34 @@ you will need Ableton live suite 11 + NDI runtime / NDI video sources
 
 Orginal code by Sebastian Frisch http://freshmania.at/ - Hiroshi Matabo v5
 
-## Recent Notes (2026-02-27)
+## OSC + Max Debug Notes (2026-02-27)
 
-- `NDI-cv5/src/OscSender.h`: OSC base address is currently hard-wired to `/NDITracker0` for consistent naming.
-- `max/NDI-osc-mapper28.5.maxpat`: ingress now expects true OSC packet parsing with `oscparse -> list trim -> route`.
-- Added Max debug/reference files:
-  - `max/ndi_cv5_true_osc_receiver_template.maxpat`
-  - `max/NDI-osc-mapper28.5.maxpat.bak`
+### Current OSC naming in NDI-cv5
+- File: `NDI-cv5/src/OscSender.h`
+- OSC base address is hard-wired to: `/NDITracker0`
+- Per blob slot, app sends:
+  - `/NDITracker0/<slot>/val`
+  - `/NDITracker0/<slot>/on`
+  - `/NDITracker0/<slot>/off`
+- Slot index is 1-based (`1..10`).
 
+### Required Max parsing chain
+- If using `udpreceive`, parse true OSC packets with:
+  - `oscparse -> list trim -> route ...`
+- Do not route raw strings directly from `udpreceive` for this stream format.
+
+### Max files for testing/debug
+- Main patch under test: `max/NDI-osc-mapper28.5.maxpat`
+- Backup before edits: `max/NDI-osc-mapper28.5.maxpat.bak`
+- Fake sender for repeatable OSC tests: `max/fake_ndi5cv_osc_sender.maxpat`
+- UDP monitor template: `max/ndi_udp_monitor_template.maxpat`
+- True OSC receiver template: `max/ndi_cv5_true_osc_receiver_template.maxpat`
+
+### Known mismatch that breaks routing
+- Old pattern: `route NDITracker0 ...`
+- Current stream is address-based (`/NDITracker0/...`), so routing must match full parsed OSC addresses.
+
+### Practical debug technique
+- First verify packet arrival at `udpreceive`.
+- Then verify parsed address/value after `oscparse` and `list trim` (use `print` or message box).
+- Only after parse is correct, route to each encapsulated blob module.
