@@ -25,7 +25,7 @@ namespace mtb{
         int sendNoteOn(int label, int maxBlobNum){
             ofxOscMessage m;
             int slot = getOscAddressSlot(label, maxBlobNum);
-            m.setAddress(oscAddress.get()+ "/" + ofToString(slot) +"/on");
+            m.setAddress(oscAddressBase + "/" + ofToString(slot) + "/on");
             m.addIntArg(label);
             sender.sendMessage(m, false);
             return slot;
@@ -34,7 +34,7 @@ namespace mtb{
         int sendNoteOff(int label, int maxBlobNum){
             ofxOscMessage m;
             int slot = getOscAddressSlot(label, maxBlobNum);
-            m.setAddress(oscAddress.get() + "/"+ ofToString(slot) +"/off");
+            m.setAddress(oscAddressBase + "/" + ofToString(slot) + "/off");
             m.addIntArg(label);
             sender.sendMessage(m, false);
             return slot;
@@ -43,7 +43,7 @@ namespace mtb{
         int sendVal(int label, int maxBlobNum, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
             ofxOscMessage m;
             int slot = getOscAddressSlot(label, maxBlobNum);
-            m.setAddress(oscAddress.get() + "/" + ofToString(slot) +"/val");
+            m.setAddress(oscAddressBase + "/" + ofToString(slot) + "/val");
             m.addIntArg(label);
             m.addFloatArg(center.x/inputSize.x);
             m.addFloatArg(center.y/inputSize.y);
@@ -83,8 +83,8 @@ namespace mtb{
         // OSC sender settings
         ofParameter<string> oscIp{"IP", "localhost"};
         ofParameter<int> oscPort{"port", 12345, 0, 12345};
-        ofParameter<string> oscAddress{"oscAddress", "/NDITracker0"};
-        ofParameterGroup grp{"OSC send", oscIp, oscPort, oscAddress};
+        const std::string oscAddressBase = "/NDITracker0";
+        ofParameterGroup grp{"OSC send", oscIp, oscPort};
         
         ofEventListeners listenerHolder;
     };
