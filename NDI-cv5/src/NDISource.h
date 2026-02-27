@@ -105,7 +105,7 @@ public:
             matRGBA = ofxCv::toCv(inImg);
             cv::cvtColor(matRGBA, matRGB, cv::COLOR_RGBA2RGB);
             if (bDetectBlob) {
-                tracker.update(matRGB);
+                tracker.updateByTrackingTechnique(matRGB);
             }
             
             drawFbo();

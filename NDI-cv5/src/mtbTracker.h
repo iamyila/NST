@@ -57,6 +57,21 @@ namespace mtb{
 
             findContour();
         }
+
+        void updateByTrackingTechnique(cv::Mat & currentMat) {
+            if (trackingTechnique == 0) {
+                update(currentMat);
+                return;
+            }
+
+            // YOLO scaffold: keep runtime behavior stable until detector/tracker is integrated.
+            static bool loggedOnce = false;
+            if (!loggedOnce) {
+                ofLogWarning("Tracker") << "YOLO mode selected, but YOLO is not integrated yet. Falling back to Blob tracking.";
+                loggedOnce = true;
+            }
+            update(currentMat);
+        }
         
         void findContour() override{
             if(!foregroundImageOf.isAllocated()) return;

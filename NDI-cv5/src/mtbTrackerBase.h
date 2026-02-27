@@ -138,6 +138,8 @@ namespace mtb{
         ofParameter<bool> bDrawCandidates{ "Draw Candidates", true};
         ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
         ofParameter<int> minAge{ "Min age", 10, 0, 60 };
-        ofParameterGroup grp{ "Tracker", minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, /*blobScale */};
+        // 0 = Blob (current implementation), 1 = YOLO (scaffold placeholder).
+        ofParameter<int> trackingTechnique{ "Tracking Technique (0 Blob, 1 YOLO)", 0, 0, 1 };
+        ofParameterGroup grp{ "Tracker", trackingTechnique, minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, /*blobScale */};
     };
 }

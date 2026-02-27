@@ -151,6 +151,20 @@ void ofApp::draw(){
         ndis[i]->sendNDI();
     }
 
+    // Bottom-left quick help for keyboard shortcuts.
+    ofPushStyle();
+    ofSetColor(255);
+    const std::string shortcuts =
+        "Shortcuts:\n"
+        "h = hide/show GUI\n"
+        "f = fullscreen\n"
+        "space = reconnect NDI\n"
+        "s = solo mode\n"
+        "g = glitch\n"
+        "c = draw candidates";
+    ofDrawBitmapStringHighlight(shortcuts, 12, ofGetHeight() - 92);
+    ofPopStyle();
+
 }
 
 void ofApp::windowResized(int w, int h){
@@ -233,11 +247,6 @@ void ofApp::applyGuiScale(float scale){
 }
 
 void ofApp::keyPressed(int key){
-
-    if(48<=key && key< 58){
-        soloMode = key-48;
-    }
-    
     switch (key){
             
         case 'h':
