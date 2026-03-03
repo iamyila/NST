@@ -20,6 +20,16 @@ void ofApp::setup(){
     updateLayout();
     gui.loadFromFile("settings.json");
 
+    // Re-apply scale after loading settings so saved `Scale GUI` state takes effect.
+    applyGuiScale(guiScaleEnabled ? ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f) : 1.0f);
+    setupGui();
+    updateLayout();
+
+    for (auto &ndi : ndis) {
+        ndi->bHeatmap = false;
+        ndi->bGlitch = false;
+    }
+
     refreshNDISources();
     applySelectedNDISource();
     connectNDI();
@@ -160,9 +170,12 @@ void ofApp::draw(){
         "f = fullscreen\n"
         "space = reconnect NDI\n"
         "s = solo mode\n"
-        "g = glitch\n"
+        "g = glitch burst (if enabled)\n"
         "c = draw candidates";
-    ofDrawBitmapStringHighlight(shortcuts, 12, ofGetHeight() - 92);
+    const float helpWidth = 230.0f;
+    const float helpX = std::max(12.0f, ofGetWidth() - helpWidth - 12.0f);
+    const float helpY = ofGetHeight() - 92.0f;
+    ofDrawBitmapStringHighlight(shortcuts, helpX, helpY);
     ofPopStyle();
 
 }
@@ -266,7 +279,9 @@ void ofApp::keyPressed(int key){
             break;
             
         case 'g':
-            ndis[0]->glitch.doGlitch(ofRandom(1, 10));
+            if (ndis[0]->bGlitch) {
+                ndis[0]->glitch.doGlitch(ofRandom(1, 10));
+            }
             break;
             
         case 'c':

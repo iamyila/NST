@@ -300,15 +300,18 @@ public:
 	ofParameter<int> processHeight{ "Process Height", 720, 135, 1080};
 	ofParameterGroup generalGrp{ "NDI in/out", NDI_name, ndiIn, ndiOut, /*ndiInHighestBandwidth,*/ processWidth, processHeight };
 
-    // Layers
+    // Tracking
     ofParameter<bool> bDetectBlob{"Detect Blob", true};
-    ofParameter<bool> bHeatmap{"Heat Map", true};
-    ofParameter<bool> bGlitch{"Glitch", true};
-    ofParameterGroup layerGrp{"Layer", bDetectBlob, bHeatmap, bGlitch};
+    ofParameterGroup trackingGrp{"Tracking", bDetectBlob};
+
+    // Optional visual FX (kept disabled by default so OSC tracking workflow stays clean).
+    ofParameter<bool> bHeatmap{"Heat Map (optional)", false};
+    ofParameter<bool> bGlitch{"Glitch (optional)", false};
+    ofParameterGroup fxGrp{"Visual FX (optional)", bHeatmap, bGlitch, heatmap.grp};
 
     ofParameter<int> lockMsec{"Lock msec", 0, 0, 10000};
     
-    ofParameterGroup prm{"NDI source", generalGrp, layerGrp, oscSender.grp, tracker.grp, heatmap.grp};
+    ofParameterGroup prm{"NDI source", generalGrp, trackingGrp, oscSender.grp, tracker.grp, fxGrp};
     
     ofEventListeners listenerHolder;    
 };

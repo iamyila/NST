@@ -127,8 +127,10 @@ namespace mtb{
         ofEventListeners listenerHolder;
 
         // CV::Contor, CV::Tracker
-        ofParameter<float> minArea{ "minArea", 5, 0, 500 };
-        ofParameter<float> maxArea{ "maxArea", 10, 0, 500 };
+        // NOTE: values are squared in findContour() (area = value^2), so these
+        // defaults are tuned to reject tiny noise while keeping medium/large blobs.
+        ofParameter<float> minArea{ "minArea", 18, 0, 500 };
+        ofParameter<float> maxArea{ "maxArea", 350, 0, 500 };
         ofParameter<bool> bFindHoles{ "find holes", false };
         ofParameter<bool> bSimplify{ "simplify", false };
         ofParameter<int> persistence{ "persistence (frames)", 15, 0, 60 };
