@@ -149,14 +149,15 @@ public:
             int h = processHeight;
             ofRectangle v = ofRectangle(0,0,w,h);
             v.scaleTo(ofGetCurrentViewport());
+            const float drawX = (ofGetWidth() - v.width) * 0.5f;
+            const float drawY = (ofGetHeight() - v.height) * 0.5f;
 			ofPushStyle();
 			ofEnableAlphaBlending();
             ofSetColor(255);
-            ofSetRectMode(OF_RECTMODE_CENTER);
-			inImg.draw(ofGetWidth() / 2, ofGetHeight() / 2, v.width, v.height);
-            if(bHeatmap) heatmap.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
-            if(bDetectBlob) tracker.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
-            if(bGlitch) glitch.drawFbo(ofGetWidth()/2, ofGetHeight()/2, v.width, v.height);
+			inImg.draw(drawX, drawY, v.width, v.height);
+            if(bHeatmap) heatmap.drawFbo(drawX, drawY, v.width, v.height);
+            if(bDetectBlob) tracker.drawFbo(drawX, drawY, v.width, v.height);
+            if(bGlitch) glitch.drawFbo(drawX, drawY, v.width, v.height);
 			ofPopStyle();
             
             {
@@ -298,11 +299,12 @@ public:
     ofParameter<bool> ndiOut{"NDI OUT", false};
 	ofParameter<int> processWidth{ "Process Width", 1280, 240, 1920};
 	ofParameter<int> processHeight{ "Process Height", 720, 135, 1080};
-	ofParameterGroup generalGrp{ "NDI in/out", NDI_name, ndiIn, ndiOut, /*ndiInHighestBandwidth,*/ processWidth, processHeight };
+	ofParameterGroup generalGrp{ "NDI in/out", NDI_name, ndiIn, ndiOut /*ndiInHighestBandwidth,*/ };
 
     // Tracking
     ofParameter<bool> bDetectBlob{"Detect Blob", true};
-    ofParameterGroup trackingGrp{"Tracking", bDetectBlob};
+    ofParameterGroup trackingAdvancedGrp{"Tracking Advanced", processWidth, processHeight};
+    ofParameterGroup trackingGrp{"Tracking", bDetectBlob, trackingAdvancedGrp};
 
     // Optional visual FX (kept disabled by default so OSC tracking workflow stays clean).
     ofParameter<bool> bHeatmap{"Heat Map (optional)", false};
@@ -311,7 +313,7 @@ public:
 
     ofParameter<int> lockMsec{"Lock msec", 0, 0, 10000};
     
-    ofParameterGroup prm{"NDI source", generalGrp, trackingGrp, oscSender.grp, tracker.grp, fxGrp};
+    ofParameterGroup prm{"Processing", trackingGrp, oscSender.grp, tracker.grp, fxGrp};
     
     ofEventListeners listenerHolder;    
 };

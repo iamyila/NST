@@ -9,28 +9,25 @@ namespace mtb{
     
     AppParam::AppParam(){
         targetFps.addListener(this, &AppParam::targetFpsChanged);
-        logLevel.addListener(this, &AppParam::logLevelChanged);        
+        debugLogging.addListener(this, &AppParam::debugLoggingChanged);
         fps.setSerializable(false);
-        logLevelMap.insert(std::make_pair("OF_LOG_VERBOSE", OF_LOG_VERBOSE));
-        logLevelMap.insert(std::make_pair("OF_LOG_NOTICE", OF_LOG_NOTICE));
-        logLevelMap.insert(std::make_pair("OF_LOG_WARNING", OF_LOG_WARNING));
-        logLevelMap.insert(std::make_pair("OF_LOG_ERROR", OF_LOG_ERROR));
-        logLevelMap.insert(std::make_pair("OF_LOG_FATAL_ERROR", OF_LOG_FATAL_ERROR));
-        logLevelMap.insert(std::make_pair("OF_LOG_SILENT", OF_LOG_SILENT));
-        ofSetLogLevel(logLevelMap.at(logLevel));
+        ofSetLogLevel(debugLogging ? OF_LOG_NOTICE : OF_LOG_SILENT);
     }
     
     
     AppParam::~AppParam() {
         targetFps.removeListener(this, &AppParam::targetFpsChanged);
+        debugLogging.removeListener(this, &AppParam::debugLoggingChanged);
     };
     
     void AppParam::targetFpsChanged(int& fps) {
-        ofSetFrameRate(fps);
+        if (!bVerticalSync) {
+            ofSetFrameRate(fps);
+        }
     }
     
-    void AppParam::logLevelChanged(std::string& level) {
-        ofSetLogLevel(logLevelMap.at(level));
+    void AppParam::debugLoggingChanged(bool& enabled) {
+        ofSetLogLevel(enabled ? OF_LOG_NOTICE : OF_LOG_SILENT);
     }
     
     void AppParam::set() {
@@ -43,6 +40,13 @@ namespace mtb{
         bAntiAliasing ? ofEnableAntiAliasing() : ofDisableAntiAliasing();
         bDepthTest ? ofEnableDepthTest() : ofDisableDepthTest();
         ofSetVerticalSync(bVerticalSync);
+        if (!bVerticalSync) {
+            // Keep frame limiter deterministic when VSync is disabled.
+            ofSetFrameRate(targetFps);
+        } else {
+            // Avoid old FPS cap values affecting behavior while VSync is enabled.
+            ofSetFrameRate(240);
+        }
         ofBackground(bg);
     }
 }

@@ -10,7 +10,7 @@ void ofApp::setup(){
 
     for(int i=0; i<1; i++){
         std::shared_ptr<NDISource> ndi = make_shared<NDISource>();
-        ndi->prm.setName("NDI Source " + ofToString(i+1));
+        ndi->prm.setName("Processing");
         ndis.emplace_back(ndi);
     }
 
@@ -124,37 +124,31 @@ void ofApp::receiveOsc(){
 }
 
 void ofApp::draw(){
+    // NOTE: Solo mode was removed from the UI because it made the control flow unclear.
+    // Keep standard multi-monitor draw path for now; `NDISource::drawSolo()` remains available
+    // if we want to reintroduce a dedicated solo view later.
+    ofPushMatrix();
+    ofTranslate(sidebarWidth, 20);
+    ofSetColor(255);
     
-    if(!soloMode){
+    int xpos = 0;
+    for (int i=0; i<ndis.size(); i++){
+            
         ofPushMatrix();
-        ofTranslate(sidebarWidth, 20);
-        ofSetColor(255);
-        
-		int xpos = 0;
-        for (int i=0; i<ndis.size(); i++){
-    			
-			ofPushMatrix();
-            ofTranslate(xpos, 0);
-            ndis[i]->draw();
-            ofPopMatrix();
-
-			int nMon = ndis[i]->getNumMonitor();
-			int h = (ofGetHeight() - 150) / nMon - 10;
-			int w = h * 1920 / 1080;
-			xpos += (w + 10);
-        }
+        ofTranslate(xpos, 0);
+        ndis[i]->draw();
         ofPopMatrix();
-    
-        if(!bHide){
-            ofDisableDepthTest();
-            gui.draw();            
-        }
 
-    }else{
-        auto ndi = ndis[0];
-        ofPushMatrix();
-        ndi->drawSolo();
-        ofPopMatrix();
+        int nMon = ndis[i]->getNumMonitor();
+        int h = (ofGetHeight() - 150) / nMon - 10;
+        int w = h * 1920 / 1080;
+        xpos += (w + 10);
+    }
+    ofPopMatrix();
+ 
+    if(!bHide){
+        ofDisableDepthTest();
+        gui.draw();            
     }
     
     for (int i=0; i<ndis.size(); i++){
@@ -169,7 +163,6 @@ void ofApp::draw(){
         "h = hide/show GUI\n"
         "f = fullscreen\n"
         "space = reconnect NDI\n"
-        "s = solo mode\n"
         "g = glitch burst (if enabled)\n"
         "c = draw candidates";
     const float helpWidth = 230.0f;
@@ -203,17 +196,17 @@ void ofApp::setupGui(){
     gui.clear();
     gui.setup("settings", "settings.json");
     gui.add(appPrm.grp);
-    gui.add(refreshSourcesBtn);
-    gui.add(prevSourceBtn);
-    gui.add(nextSourceBtn);
-    gui.add(ndiSourceName);
-    gui.add(applySelectedSourceBtn);
-    gui.add(connectNDIBtn);
-    gui.add(soloMode);
-    gui.add(guiScaleEnabled);
+    ndiGrp.clear();
+    ndiGrp.setName("NDI");
+    ndiGrp.add(sourceSelectGrp);
+    for (auto &ndi : ndis) {
+        ndiGrp.add(ndi->generalGrp);
+    }
+    gui.add(ndiGrp);
     for (auto &ndi : ndis) {
         gui.add(ndi->prm);
     }
+    gui.add(guiScaleEnabled);
 
     listenerHolder.unsubscribeAll();
     listenerHolder.push(refreshSourcesBtn.newListener([&](void){
@@ -272,10 +265,6 @@ void ofApp::keyPressed(int key){
 
 		case ' ':
 			connectNDI();
-            break;
-            
-        case 's':
-			soloMode = !soloMode;
             break;
             
         case 'g':

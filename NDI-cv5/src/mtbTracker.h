@@ -84,8 +84,8 @@ namespace mtb{
 
             ofxCv::RectTracker & tracker = finder.getTracker();
             //tracker.setSmoothingRate(smoothingRate);
-            tracker.setMaximumDistance(maxDistance);
-            tracker.setPersistence(persistence);
+            tracker.setMaximumDistance(getTrackMatchDistancePx());
+            tracker.setPersistence(getTrackHoldFrames());
 
             //finder.findContours(foregroundImage);
             finder.findContours(foregroundMat);
@@ -189,7 +189,7 @@ namespace mtb{
                 
                 if(bSent && bDead){
                     int afterDeath = info.framesAfterDeath;
-                    if( persistence <= afterDeath ){
+                    if( getTrackHoldFrames() <= afterDeath ){
                         if(needNoteOff(label)){
                             
                             sendNoteOff(label);

@@ -99,6 +99,15 @@ namespace mtb{
         int sendNoteOn(int label);
         int sendNoteOff(int label);
         int sendVal(int label, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize);
+
+        // UI is strictness-based: higher values are stricter (shorter hold / smaller match distance).
+        int getTrackHoldFrames() const {
+            return static_cast<int>(ofMap(trackHoldStrictness, 0.0f, 100.0f, 16.0f, 1.0f, true));
+        }
+
+        float getTrackMatchDistancePx() const {
+            return ofMap(trackMatchStrictness, 0.0f, 100.0f, 140.0f, 20.0f, true);
+        }
         
         //ofxCvContourFinder contourFinder;
         ofxCv::ContourFinder finder;
@@ -133,8 +142,8 @@ namespace mtb{
         ofParameter<float> maxArea{ "maxArea", 350, 0, 500 };
         ofParameter<bool> bFindHoles{ "find holes", false };
         ofParameter<bool> bSimplify{ "simplify", false };
-        ofParameter<int> persistence{ "persistence (frames)", 15, 0, 60 };
-        ofParameter<float> maxDistance{ "max distance (pix)", 100, 0, 500 };
+        ofParameter<float> trackHoldStrictness{ "Track Hold Strictness (0 normal, 100 strict)", 20, 0, 100 };
+        ofParameter<float> trackMatchStrictness{ "Track Match Strictness (0 normal, 100 strict)", 20, 0, 100 };
         //ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
         ofParameter<int> maxBlobCandidate{ "Max blob candidate", 10, 1, 100 };
         ofParameter<bool> bDrawCandidates{ "Draw Candidates", true};
@@ -142,6 +151,6 @@ namespace mtb{
         ofParameter<int> minAge{ "Min age", 10, 0, 60 };
         // 0 = Blob (current implementation), 1 = YOLO (scaffold placeholder).
         ofParameter<int> trackingTechnique{ "Tracking Technique (0 Blob, 1 YOLO)", 0, 0, 1 };
-        ofParameterGroup grp{ "Tracker", trackingTechnique, minArea, maxArea, bFindHoles, bSimplify, persistence, maxDistance, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, /*blobScale */};
+        ofParameterGroup grp{ "Tracker", trackingTechnique, minArea, maxArea, bFindHoles, bSimplify, trackHoldStrictness, trackMatchStrictness, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, /*blobScale */};
     };
 }
