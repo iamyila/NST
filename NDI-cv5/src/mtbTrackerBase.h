@@ -149,8 +149,11 @@ namespace mtb{
         ofParameter<bool> bDrawCandidates{ "Draw Candidates", true};
         ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
         ofParameter<int> minAge{ "Min age", 10, 0, 60 };
+        // Stricter admission age when already tracking two or more blobs.
+        // Helps avoid transient false positives stealing extra voices.
+        ofParameter<int> extraVoiceMinAge{ "Extra voice min age", 10, 0, 120 };
         // 0 = Blob (current implementation), 1 = YOLO (scaffold placeholder).
         ofParameter<int> trackingTechnique{ "Tracking Technique (0 Blob, 1 YOLO)", 0, 0, 1 };
-        ofParameterGroup grp{ "Tracker", trackingTechnique, minArea, maxArea, bFindHoles, bSimplify, trackHoldStrictness, trackMatchStrictness, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, /*blobScale */};
+        ofParameterGroup grp{ "Tracker", trackingTechnique, minArea, maxArea, bFindHoles, bSimplify, trackHoldStrictness, trackMatchStrictness, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, extraVoiceMinAge, /*blobScale */};
     };
 }

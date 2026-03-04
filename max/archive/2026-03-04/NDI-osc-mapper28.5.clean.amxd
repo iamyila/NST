@@ -79,7 +79,7 @@
           "lockeddragscroll": 0,
           "lockedsize": 0,
           "maxclass": "bpatcher",
-          "name": "trackerdata.maxpat",
+          "name": "trackerdata.clean.maxpat",
           "numinlets": 1,
           "numoutlets": 0,
           "offset": [
@@ -113,7 +113,7 @@
           "lockeddragscroll": 0,
           "lockedsize": 0,
           "maxclass": "bpatcher",
-          "name": "trackerdata.maxpat",
+          "name": "trackerdata.clean.maxpat",
           "numinlets": 1,
           "numoutlets": 0,
           "offset": [
@@ -147,7 +147,7 @@
           "lockeddragscroll": 0,
           "lockedsize": 0,
           "maxclass": "bpatcher",
-          "name": "trackerdata.maxpat",
+          "name": "trackerdata.clean.maxpat",
           "numinlets": 1,
           "numoutlets": 0,
           "offset": [
@@ -181,7 +181,7 @@
           "lockeddragscroll": 0,
           "lockedsize": 0,
           "maxclass": "bpatcher",
-          "name": "trackerdata.maxpat",
+          "name": "trackerdata.clean.maxpat",
           "numinlets": 1,
           "numoutlets": 0,
           "offset": [
@@ -215,7 +215,7 @@
           "lockeddragscroll": 0,
           "lockedsize": 0,
           "maxclass": "bpatcher",
-          "name": "trackerdata.maxpat",
+          "name": "trackerdata.clean.maxpat",
           "numinlets": 1,
           "numoutlets": 0,
           "offset": [
@@ -249,7 +249,7 @@
           "lockeddragscroll": 0,
           "lockedsize": 0,
           "maxclass": "bpatcher",
-          "name": "trackerdata.maxpat",
+          "name": "trackerdata.clean.maxpat",
           "numinlets": 1,
           "numoutlets": 0,
           "offset": [
@@ -283,7 +283,7 @@
           "lockeddragscroll": 0,
           "lockedsize": 0,
           "maxclass": "bpatcher",
-          "name": "trackerdata.maxpat",
+          "name": "trackerdata.clean.maxpat",
           "numinlets": 1,
           "numoutlets": 0,
           "offset": [
@@ -317,7 +317,7 @@
           "lockeddragscroll": 0,
           "lockedsize": 0,
           "maxclass": "bpatcher",
-          "name": "trackerdata.maxpat",
+          "name": "trackerdata.clean.maxpat",
           "numinlets": 1,
           "numoutlets": 0,
           "offset": [
@@ -351,7 +351,7 @@
           "lockeddragscroll": 0,
           "lockedsize": 0,
           "maxclass": "bpatcher",
-          "name": "trackerdata.maxpat",
+          "name": "trackerdata.clean.maxpat",
           "numinlets": 1,
           "numoutlets": 0,
           "offset": [
@@ -385,7 +385,7 @@
           "lockeddragscroll": 0,
           "lockedsize": 0,
           "maxclass": "bpatcher",
-          "name": "trackerdata.maxpat",
+          "name": "trackerdata.clean.maxpat",
           "numinlets": 1,
           "numoutlets": 0,
           "offset": [

@@ -6,6 +6,8 @@
 
 #include "ofMain.h"
 #include "ofxOsc.h"
+#include <map>
+#include <vector>
 
 namespace mtb{
     
@@ -23,27 +25,24 @@ namespace mtb{
         }
         
         int sendNoteOn(int label, int maxBlobNum){
-            ofxOscMessage m;
             int slot = getOscAddressSlot(label, maxBlobNum);
-            m.setAddress(oscAddressBase + "/" + ofToString(slot) + "/on");
-            m.addIntArg(label);
-            sender.sendMessage(m, false);
+            // Legacy AMXD pipeline derives note on/off internally from value stream.
+            // Keep API return value for tracker bookkeeping, but don't emit separate OSC events.
             return slot;
         }
         
         int sendNoteOff(int label, int maxBlobNum){
-            ofxOscMessage m;
             int slot = getOscAddressSlot(label, maxBlobNum);
-            m.setAddress(oscAddressBase + "/" + ofToString(slot) + "/off");
-            m.addIntArg(label);
-            sender.sendMessage(m, false);
+            // See sendNoteOn(): avoid injecting extra message shapes into legacy route chain.
+            releaseOscAddressSlot(label);
             return slot;
         }
         
         int sendVal(int label, int maxBlobNum, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
             ofxOscMessage m;
             int slot = getOscAddressSlot(label, maxBlobNum);
-            m.setAddress(oscAddressBase + "/" + ofToString(slot) + "/val");
+            // One address per slot keeps compatibility with "route NDITracker1 ... NDITracker10".
+            m.setAddress(oscAddressBase + ofToString(slot));
             m.addIntArg(label);
             m.addFloatArg(center.x/inputSize.x);
             m.addFloatArg(center.y/inputSize.y);
@@ -55,12 +54,14 @@ namespace mtb{
             glm::vec2 p = toPolar(center.x, center.y, inputSize.x, inputSize.y);
             m.addFloatArg(p.x);
             m.addFloatArg(p.y);
-            sender.sendMessage(m);
+            // Max route chains in this project expect plain OSC messages, not bundled packets.
+            sender.sendMessage(m, false);
             
             return slot;
         }
         
-        static int getOscAddressSlot(int label, int maxBlobNum);
+        int getOscAddressSlot(int label, int maxBlobNum);
+        void releaseOscAddressSlot(int label);
         
     private:
         glm::vec2 toPolar(float x, float y, float w, float h){
@@ -78,12 +79,14 @@ namespace mtb{
         }
         
         ofxOscSender sender;
+        std::map<int, int> labelToSlot;
 
     public:
         // OSC sender settings
         ofParameter<string> oscIp{"IP", "localhost"};
         ofParameter<int> oscPort{"port", 12345, 0, 12345};
-        const std::string oscAddressBase = "/NDITracker1";
+        // Legacy Max route object in AMXD matches symbols without a leading slash.
+        const std::string oscAddressBase = "NDITracker";
         ofParameterGroup grp{"OSC send", oscIp, oscPort};
         
         ofEventListeners listenerHolder;

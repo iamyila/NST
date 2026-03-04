@@ -129,6 +129,12 @@ namespace mtb{
 //            }
 
             vector<int> noteOnSendInThisLoop;
+            int soundingCount = 0;
+            for (const auto& kv : noteOnSentMap) {
+                if (kv.second.bSent && !kv.second.bDead) {
+                    soundingCount++;
+                }
+            }
             
             for(; itrC!=currs.end(); ++itrC){
                 int label = *itrC;
@@ -137,7 +143,11 @@ namespace mtb{
                 bool noteOnSent = isNoteOnSent(label);
                 if(noteOnSent == false){
                     int age = tracker.getAge(label);
-                    if(minAge <= age){
+                    int requiredAge = minAge;
+                    if (soundingCount >= 2) {
+                        requiredAge = std::max(requiredAge, static_cast<int>(extraVoiceMinAge));
+                    }
+                    if(requiredAge <= age){
                         sendNoteOn(label);
                         
                         if(noteOnSentMap.count(label) == 0){
@@ -150,6 +160,7 @@ namespace mtb{
                         cout << "NoteOn  " << label << endl;
                         
                         noteOnSendInThisLoop.push_back(label);
+                        soundingCount++;
                     }
                 }
 
@@ -175,9 +186,9 @@ namespace mtb{
                 int label = itrM->first;
 
                 // Do not send noteOff, if we send noteOn already
-                int slot = OscSender::getOscAddressSlot(label, maxBlobNum);
+                int slot = getOscAddressSlot(label);
                 for(int i=0; i<noteOnSendInThisLoop.size(); i++){
-                    int sentSlot = OscSender::getOscAddressSlot(noteOnSendInThisLoop[i], maxBlobNum);
+                    int sentSlot = getOscAddressSlot(noteOnSendInThisLoop[i]);
                     if(sentSlot == slot){
                         continue;
                     }

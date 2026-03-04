@@ -1,6 +1,9 @@
 #include "ofApp.h"
 
 using namespace ofxNDI::Recv;
+namespace {
+const std::string kGuiSettingsFile = "settings_v2.json";
+}
 
 void ofApp::setup(){
 
@@ -18,12 +21,9 @@ void ofApp::setup(){
     applyGuiScale(guiScaleEnabled ? ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f) : 1.0f);
     setupGui();
     updateLayout();
-    gui.loadFromFile("settings.json");
-
-    // Re-apply scale after loading settings so saved `Scale GUI` state takes effect.
-    applyGuiScale(guiScaleEnabled ? ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f) : 1.0f);
-    setupGui();
-    updateLayout();
+    // Loading saved GUI state is disabled for now because schema drift between builds
+    // can trigger a startup crash in ofxGui deserialization.
+    // gui.loadFromFile(kGuiSettingsFile);
 
     for (auto &ndi : ndis) {
         ndi->bHeatmap = false;
@@ -194,7 +194,7 @@ void ofApp::updateLayout(){
 
 void ofApp::setupGui(){
     gui.clear();
-    gui.setup("settings", "settings.json");
+    gui.setup("settings", kGuiSettingsFile);
     gui.add(appPrm.grp);
     ndiGrp.clear();
     ndiGrp.setName("NDI");

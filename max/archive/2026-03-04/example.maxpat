@@ -417,7 +417,7 @@
 						}
 ,
 						"valueof" : 						{
-							"parameter_initial" : [ 100 ],
+							"parameter_initial" : [ 500 ],
 							"parameter_initial_enable" : 1,
 							"parameter_invisible" : 1,
 							"parameter_linknames" : 1,
@@ -3525,7 +3525,7 @@
 , 							{
 								"box" : 								{
 									"border" : 0,
-									"filename" : "Mac:/Users/subbasstian/Desktop/EnvelopeUI.js",
+									"filename" : "EnvelopeUI.js",
 									"id" : "obj-46",
 									"maxclass" : "jsui",
 									"numinlets" : 1,

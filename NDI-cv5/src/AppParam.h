@@ -20,8 +20,8 @@ namespace mtb {
 
 		static const string version;
 		ofParameter<bool> debugLogging{ "Debug Logs", false };
-		ofParameter<bool> bVerticalSync{ "Vertical Sync", true };
-		ofParameter<int> targetFps{ "Target FPS (VSync off)", 50, 1, 60 };
+		ofParameter<bool> bVerticalSync{ "Vertical Sync", false };
+		ofParameter<int> targetFps{ "Target FPS (VSync off)", 120, 1, 240 };
 		ofParameter<int> fps{ "FPS", -1, 0, 500 };
 		ofParameter<ofColor> bg{ "Background Color", ofColor(0), ofColor(0), ofColor(255) };
 		ofParameter<bool> bAlphaBlending{ "Alpha Blending (advanced)", true };
