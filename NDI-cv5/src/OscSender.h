@@ -80,6 +80,7 @@ namespace mtb{
         
         ofxOscSender sender;
         std::map<int, int> labelToSlot;
+        int fallbackRoundRobinSlot = 1;
 
     public:
         // OSC sender settings

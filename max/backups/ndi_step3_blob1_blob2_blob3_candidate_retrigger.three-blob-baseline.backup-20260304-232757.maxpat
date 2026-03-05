@@ -729,6 +729,115 @@
           ],
           "text": "print BLOB3_LABEL"
         }
+      },
+      {
+        "box": {
+          "id": "b1_xy_comment",
+          "maxclass": "comment",
+          "patching_rect": [
+            40.0,
+            340.0,
+            170.0,
+            20.0
+          ],
+          "text": "Blob1 XY (Ableton mappable)"
+        }
+      },
+      {
+        "box": {
+          "id": "b1_x_clip",
+          "maxclass": "newobj",
+          "patching_rect": [
+            40.0,
+            365.0,
+            65.0,
+            22.0
+          ],
+          "text": "clip 0. 1."
+        }
+      },
+      {
+        "box": {
+          "id": "b1_x_map",
+          "maxclass": "live.numbox",
+          "patching_rect": [
+            115.0,
+            365.0,
+            60.0,
+            22.0
+          ],
+          "numinlets": 1,
+          "numoutlets": 2,
+          "outlettype": [
+            "",
+            ""
+          ],
+          "parameter_enable": 1,
+          "saved_attribute_attributes": {
+            "valueof": {
+              "parameter_longname": "Blob1 X",
+              "parameter_shortname": "B1 X",
+              "parameter_mmin": 0.0,
+              "parameter_mmax": 1.0,
+              "parameter_type": 0,
+              "parameter_modmode": 0,
+              "parameter_initial": [
+                0.0
+              ],
+              "parameter_initial_enable": 1,
+              "parameter_invisible": 0
+            }
+          },
+          "varname": "blob1_x"
+        }
+      },
+      {
+        "box": {
+          "id": "b1_y_clip",
+          "maxclass": "newobj",
+          "patching_rect": [
+            40.0,
+            395.0,
+            65.0,
+            22.0
+          ],
+          "text": "clip 0. 1."
+        }
+      },
+      {
+        "box": {
+          "id": "b1_y_map",
+          "maxclass": "live.numbox",
+          "patching_rect": [
+            115.0,
+            395.0,
+            60.0,
+            22.0
+          ],
+          "numinlets": 1,
+          "numoutlets": 2,
+          "outlettype": [
+            "",
+            ""
+          ],
+          "parameter_enable": 1,
+          "saved_attribute_attributes": {
+            "valueof": {
+              "parameter_longname": "Blob1 Y",
+              "parameter_shortname": "B1 Y",
+              "parameter_mmin": 0.0,
+              "parameter_mmax": 1.0,
+              "parameter_type": 0,
+              "parameter_modmode": 0,
+              "parameter_initial": [
+                0.0
+              ],
+              "parameter_initial_enable": 1,
+              "parameter_invisible": 0
+            }
+          },
+          "varname": "blob1_y"
+        }
       }
     ],
     "lines": [
@@ -1628,6 +1737,54 @@
           ],
           "destination": [
             "obj-42",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "b1_unpack",
+            1
+          ],
+          "destination": [
+            "b1_x_clip",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "b1_x_clip",
+            0
+          ],
+          "destination": [
+            "b1_x_map",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "b1_unpack",
+            2
+          ],
+          "destination": [
+            "b1_y_clip",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "b1_y_clip",
+            0
+          ],
+          "destination": [
+            "b1_y_map",
             0
           ]
         }

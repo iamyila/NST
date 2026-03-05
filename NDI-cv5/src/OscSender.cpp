@@ -35,8 +35,17 @@ namespace mtb{
             }
         }
 
-        // Fallback if all slots are occupied.
-        int slot = (label % maxBlobNum + maxBlobNum) % maxBlobNum + 1;
+        // Fallback if all slots are occupied:
+        // cycle slot selection in round-robin order so replacement voices
+        // rotate 1..N instead of sticking to a modulo-biased slot.
+        int slot = fallbackRoundRobinSlot;
+        if (slot < 1 || slot > maxBlobNum) {
+            slot = 1;
+        }
+        fallbackRoundRobinSlot = slot + 1;
+        if (fallbackRoundRobinSlot > maxBlobNum) {
+            fallbackRoundRobinSlot = 1;
+        }
         labelToSlot[label] = slot;
         return slot;
     }
