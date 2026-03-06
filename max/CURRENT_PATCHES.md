@@ -5,3 +5,5 @@
 - Historical step patches archived at:     /Users/alastairmcneill/Documents/GitHub/NST/max/archive/2026-03-05/cleanup-20260305-002033
 
 - Main snapshot backup:     /Users/alastairmcneill/Documents/GitHub/NST/max/backups/ndi_step3_blob1_blob2_blob3_candidate_retrigger.main.backup-20260305-002033.maxpat
+
+- State log (what worked / what broke):     /Users/alastairmcneill/Documents/GitHub/NST/max/TEST_STATE_LOG.md

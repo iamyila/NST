@@ -1,0 +1,26 @@
+# lfomap de-encapsulated subpatchers
+
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-17_p_ShapeAndWaveform.maxpat`  (7 boxes, 6 lines)  - p ShapeAndWaveform
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-17_p_ShapeAndWaveform_obj-16_p_init_glider.maxpat`  (5 boxes, 4 lines)  - p init_glider
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-17_p_ShapeAndWaveform_obj-3_gen_t_ShapeAndWaveform.maxpat`  (7 boxes, 6 lines)  - gen~ @t ShapeAndWaveform
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-17_p_ShapeAndWaveform_obj-3_gen_t_ShapeAndWaveform_obj-5_gen_t_waveform.maxpat`  (5 boxes, 4 lines)  - gen @t waveform
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-17_p_ShapeAndWaveform_obj-3_gen_t_ShapeAndWaveform_obj-3_gen_t_exponent.maxpat`  (4 boxes, 3 lines)  - gen @t exponent
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-29_p_SetOffsetLine.maxpat`  (15 boxes, 20 lines)  - p SetOffsetLine
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-59_p_ShapeEnable.maxpat`  (7 boxes, 7 lines)  - p ShapeEnable
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-32_p_x10.maxpat`  (8 boxes, 9 lines)  - p x10
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-68_p_Steps.maxpat`  (13 boxes, 16 lines)  - p Steps
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-28_p_ActivateSteps.maxpat`  (7 boxes, 10 lines)  - p ActivateSteps
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-21_p_InitScope.maxpat`  (7 boxes, 6 lines)  - p InitScope
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-12_p_TimeMode.maxpat`  (14 boxes, 17 lines)  - p TimeMode
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-3_p_TimingAndPhase.maxpat`  (34 boxes, 38 lines)  - p TimingAndPhase
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-3_p_TimingAndPhase_obj-8_p_ApplyTimeSignature.maxpat`  (8 boxes, 8 lines)  - p ApplyTimeSignature
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-3_p_TimingAndPhase_obj-31_p_FreePhasor.maxpat`  (9 boxes, 8 lines)  - p FreePhasor
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-3_p_TimingAndPhase_obj-27_p_SyncedPhasor.maxpat`  (4 boxes, 3 lines)  - p SyncedPhasor
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-4_p_PushBanks.maxpat`  (6 boxes, 6 lines)  - p PushBanks
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-47_p_SignalScaling.maxpat`  (10 boxes, 10 lines)  - p SignalScaling
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-43_p_RandomizeAndSmooth.maxpat`  (8 boxes, 6 lines)  - p RandomizeAndSmooth
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-43_p_RandomizeAndSmooth_obj-98_p_Smooth.maxpat`  (5 boxes, 5 lines)  - p Smooth
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-43_p_RandomizeAndSmooth_obj-99_p_Jitter.maxpat`  (7 boxes, 7 lines)  - p Jitter
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-56_p_Hold.maxpat`  (8 boxes, 9 lines)  - p Hold
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-66_p_Blink.maxpat`  (17 boxes, 20 lines)  - p Blink
+- `/Users/alastairmcneill/Documents/GitHub/NST/max/deencap/lfomap/lfomap_obj-75_p_ButtonColor.maxpat`  (32 boxes, 44 lines)  - p ButtonColor

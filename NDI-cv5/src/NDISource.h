@@ -95,39 +95,6 @@ public:
     }
     
     void update(){
-        if (testVideo) {
-            const int w = processWidth;
-            const int h = processHeight;
-            cv::Mat synthetic(h, w, CV_8UC3, cv::Scalar(0, 0, 0));
-
-            bool b1 = testBlob1;
-            bool b2 = testBlob2;
-            if (testAutoOnOff) {
-                testFrameCounter++;
-                // Two independent square-wave gates so blobs repeatedly appear/disappear.
-                b1 = ((testFrameCounter / 30) % 2) == 0;
-                b2 = ((testFrameCounter / 45) % 2) == 0;
-            }
-
-            if (b1) {
-                cv::circle(synthetic, cv::Point(w * 0.35f, h * 0.55f), std::max(12, w / 18), cv::Scalar(255, 255, 255), cv::FILLED);
-            }
-            if (b2) {
-                cv::circle(synthetic, cv::Point(w * 0.68f, h * 0.40f), std::max(10, w / 24), cv::Scalar(255, 255, 255), cv::FILLED);
-            }
-
-            matRGB = synthetic;
-            ofPixels pix;
-            pix.setFromPixels(matRGB.data, w, h, OF_PIXELS_RGB);
-            inImg.setFromPixels(pix);
-
-            if (bDetectBlob) {
-                tracker.updateByTrackingTechnique(matRGB);
-            }
-            drawFbo();
-            return;
-        }
-
 		if (receiver.update()) {
 			ofPixels& pix = receiver.getPixels();
 			//pix.setImageType(OF_IMAGE_COLOR);
@@ -176,7 +143,7 @@ public:
     void drawSolo(){
         if(!ndiIn) return;
         
-        if(receiver.isConnected() || testVideo){
+        if(receiver.isConnected()){
             int w = processWidth;
             int h = processHeight;
             ofRectangle v = ofRectangle(0,0,w,h);
@@ -217,7 +184,7 @@ public:
         
         if(!ndiIn) return;
       
-        if(receiver.isConnected() || testVideo){
+        if(receiver.isConnected()){
             
 			int nMon = getNumMonitor();
 			int h = (ofGetHeight() - 150) / nMon - 10;
@@ -329,13 +296,9 @@ public:
     ofParameter<string> NDI_name{"NDI Source Match (Manual)", "SENDER1"};
     ofParameter<bool> ndiIn{"NDI IN",false};
     ofParameter<bool> ndiOut{"NDI OUT", false};
-    ofParameter<bool> testVideo{"Test Video (synthetic)", false};
-    ofParameter<bool> testAutoOnOff{"Test Auto On/Off", true};
-    ofParameter<bool> testBlob1{"Test Blob 1", true};
-    ofParameter<bool> testBlob2{"Test Blob 2", false};
 	ofParameter<int> processWidth{ "Process Width", 1280, 240, 1920};
 	ofParameter<int> processHeight{ "Process Height", 720, 135, 1080};
-	ofParameterGroup generalGrp{ "NDI in/out", NDI_name, ndiIn, ndiOut, testVideo, testAutoOnOff, testBlob1, testBlob2 /*ndiInHighestBandwidth,*/ };
+	ofParameterGroup generalGrp{ "NDI in/out", NDI_name, ndiIn, ndiOut /*ndiInHighestBandwidth,*/ };
 
     // Tracking
     ofParameter<bool> bDetectBlob{"Detect Blob", true};
@@ -351,6 +314,5 @@ public:
     
     ofParameterGroup prm{"Processing", trackingGrp, oscSender.grp, tracker.grp, fxGrp};
     
-    ofEventListeners listenerHolder;    
-    int testFrameCounter = 0;
+    ofEventListeners listenerHolder;
 };
