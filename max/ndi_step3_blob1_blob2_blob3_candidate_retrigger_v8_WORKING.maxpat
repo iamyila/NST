@@ -5463,7 +5463,7 @@
         "box": {
           "id": "b1_dist_calc",
           "maxclass": "newobj",
-          "text": "expr pow((sqrt(($f1*$f1)+($f2*$f2))/0.70710678),1.1)",
+          "text": "expr pow(min(max((sqrt(($f1*$f1)+($f2*$f2))/0.70710678),0.),1.),1.15)",
           "numinlets": 2,
           "numoutlets": 1,
           "outlettype": [
