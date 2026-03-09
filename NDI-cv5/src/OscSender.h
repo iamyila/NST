@@ -23,6 +23,11 @@ namespace mtb{
         void setup(){
             sender.setup(oscIp, oscPort);
         }
+
+        // Call once per tracker frame so slot ownership can expire stale labels.
+        void beginFrame(){
+            frameCounter++;
+        }
         
         int sendNoteOn(int label, int maxBlobNum){
             int slot = getOscAddressSlot(label, maxBlobNum);
@@ -80,6 +85,9 @@ namespace mtb{
         
         ofxOscSender sender;
         std::map<int, int> labelToSlot;
+        std::map<int, uint64_t> labelLastSeenFrame;
+        uint64_t frameCounter = 0;
+        int slotStaleFrames = 2;
         int fallbackRoundRobinSlot = 1;
 
     public:

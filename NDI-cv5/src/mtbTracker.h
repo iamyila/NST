@@ -75,6 +75,7 @@ namespace mtb{
         
         void findContour() override{
             if(!foregroundImageOf.isAllocated()) return;
+            beginOscFrame();
             
             finder.setMinArea(minArea*minArea);
             finder.setMaxArea(maxArea*maxArea);

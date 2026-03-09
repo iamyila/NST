@@ -30,5 +30,9 @@ namespace mtb{
     int mtbTrackerBase::sendVal(int label, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
         return user->oscSender.sendVal(label, maxBlobNum, vel, area, age, center, inputSize);
     }
+
+    void mtbTrackerBase::beginOscFrame(){
+        user->oscSender.beginFrame();
+    }
     
 }

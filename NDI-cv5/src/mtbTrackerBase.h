@@ -99,6 +99,7 @@ namespace mtb{
         int sendNoteOn(int label);
         int sendNoteOff(int label);
         int sendVal(int label, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize);
+        void beginOscFrame();
 
         // UI is strictness-based: higher values are stricter (shorter hold / smaller match distance).
         int getTrackHoldFrames() const {

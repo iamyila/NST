@@ -54,7 +54,7 @@
             104.0,
             22.0
           ],
-          "text": "r ndi_tracker_bus"
+          "text": "udpreceive 12345"
         }
       },
       {
@@ -333,7 +333,7 @@
             55.0,
             22.0
           ],
-          "text": "64 100"
+          "text": "60 100"
         }
       },
       {
@@ -351,7 +351,7 @@
             45.0,
             22.0
           ],
-          "text": "64 0"
+          "text": "60 0"
         }
       },
       {
@@ -602,7 +602,7 @@
             55.0,
             22.0
           ],
-          "text": "65 100"
+          "text": "62 100"
         }
       },
       {
@@ -620,7 +620,7 @@
             45.0,
             22.0
           ],
-          "text": "65 0"
+          "text": "62 0"
         }
       },
       {
@@ -1027,7 +1027,7 @@
             120.0,
             20.0
           ],
-          "text": "B3 Map Bank"
+          "text": "B1 Map Bank"
         }
       },
       {
@@ -6190,7 +6190,7 @@
             120.0,
             20.0
           ],
-          "text": "B4 Map Bank"
+          "text": "B2 Map Bank"
         }
       },
       {
@@ -11304,218 +11304,17 @@
       },
       {
         "box": {
-          "id": "b1_azi_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
+          "id": "bus_send",
+          "maxclass": "newobj",
+          "text": "s ndi_tracker_bus",
           "patching_rect": [
-            1173.0,
-            882.0,
-            30.0,
+            220.0,
+            62.0,
+            120.0,
             22.0
           ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b1_dist_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            992.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b1_size_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            772.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b1_spd_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            662.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b1_x_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            442.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b1_y_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            552.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b2_azi_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            1062.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b2_dist_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            1172.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b2_size_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            952.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b2_spd_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            842.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b2_x_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            622.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
-        }
-      },
-      {
-        "box": {
-          "id": "b2_y_lane_clear_id0",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "outlettype": [
-            ""
-          ],
-          "patching_rect": [
-            1173.0,
-            732.0,
-            30.0,
-            22.0
-          ],
-          "text": "0"
+          "numinlets": 1,
+          "numoutlets": 0
         }
       }
     ],
@@ -14083,59 +13882,47 @@
       {
         "patchline": {
           "destination": [
-            "obj-41",
-            1
-          ],
-          "source": [
-            "obj-40",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "destination": [
-            "obj-41",
-            0
-          ],
-          "source": [
-            "obj-40",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "obj-2",
-            2
-          ],
-          "destination": [
             "b1_tlb",
             0
+          ],
+          "source": [
+            "obj-2",
+            0
           ]
         }
       },
       {
         "patchline": {
-          "source": [
-            "obj-2",
-            3
-          ],
           "destination": [
             "b2_tlb",
             0
+          ],
+          "source": [
+            "obj-2",
+            1
           ]
         }
       },
       {
         "patchline": {
-          "source": [
-            "b1_azi_lane",
+          "destination": [
+            "obj-41",
             1
           ],
+          "source": [
+            "obj-40",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
           "destination": [
-            "b1_azi_lane_clear_id0",
+            "obj-41",
+            0
+          ],
+          "source": [
+            "obj-40",
             0
           ]
         }
@@ -14143,276 +13930,12 @@
       {
         "patchline": {
           "source": [
-            "b1_azi_lane_clear_id0",
+            "obj-1",
             0
           ],
           "destination": [
-            "b1_azi_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b1_dist_lane",
-            1
-          ],
-          "destination": [
-            "b1_dist_lane_clear_id0",
+            "bus_send",
             0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b1_dist_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b1_dist_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b1_size_lane",
-            1
-          ],
-          "destination": [
-            "b1_size_lane_clear_id0",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b1_size_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b1_size_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b1_spd_lane",
-            1
-          ],
-          "destination": [
-            "b1_spd_lane_clear_id0",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b1_spd_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b1_spd_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b1_x_lane",
-            1
-          ],
-          "destination": [
-            "b1_x_lane_clear_id0",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b1_x_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b1_x_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b1_y_lane",
-            1
-          ],
-          "destination": [
-            "b1_y_lane_clear_id0",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b1_y_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b1_y_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_azi_lane",
-            1
-          ],
-          "destination": [
-            "b2_azi_lane_clear_id0",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_azi_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b2_azi_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_dist_lane",
-            1
-          ],
-          "destination": [
-            "b2_dist_lane_clear_id0",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_dist_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b2_dist_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_size_lane",
-            1
-          ],
-          "destination": [
-            "b2_size_lane_clear_id0",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_size_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b2_size_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_spd_lane",
-            1
-          ],
-          "destination": [
-            "b2_spd_lane_clear_id0",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_spd_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b2_spd_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_x_lane",
-            1
-          ],
-          "destination": [
-            "b2_x_lane_clear_id0",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_x_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b2_x_lane",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_y_lane",
-            1
-          ],
-          "destination": [
-            "b2_y_lane_clear_id0",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "b2_y_lane_clear_id0",
-            0
-          ],
-          "destination": [
-            "b2_y_lane",
-            1
           ]
         }
       }

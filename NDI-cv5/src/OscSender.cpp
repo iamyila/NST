@@ -16,9 +16,26 @@ namespace mtb{
         auto it = labelToSlot.find(label);
         if (it != labelToSlot.end()) {
             if (it->second >= 1 && it->second <= maxBlobNum) {
+                labelLastSeenFrame[label] = frameCounter;
                 return it->second;
             }
             labelToSlot.erase(it);
+            labelLastSeenFrame.erase(label);
+        }
+
+        // Reclaim stale labels quickly so a single visible blob does not rotate slots
+        // when tracker labels churn for a few frames.
+        std::vector<int> staleLabels;
+        for (const auto& kv : labelLastSeenFrame) {
+            const int seenLabel = kv.first;
+            const uint64_t lastSeen = kv.second;
+            if (frameCounter > lastSeen + static_cast<uint64_t>(slotStaleFrames)) {
+                staleLabels.push_back(seenLabel);
+            }
+        }
+        for (int staleLabel : staleLabels) {
+            labelLastSeenFrame.erase(staleLabel);
+            labelToSlot.erase(staleLabel);
         }
 
         std::vector<bool> used(maxBlobNum + 1, false);
@@ -31,6 +48,7 @@ namespace mtb{
         for (int slot = 1; slot <= maxBlobNum; ++slot) {
             if (!used[slot]) {
                 labelToSlot[label] = slot;
+                labelLastSeenFrame[label] = frameCounter;
                 return slot;
             }
         }
@@ -47,10 +65,12 @@ namespace mtb{
             fallbackRoundRobinSlot = 1;
         }
         labelToSlot[label] = slot;
+        labelLastSeenFrame[label] = frameCounter;
         return slot;
     }
 
     void OscSender::releaseOscAddressSlot(int label){
         labelToSlot.erase(label);
+        labelLastSeenFrame.erase(label);
     }
 }
