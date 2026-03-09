@@ -28,6 +28,8 @@ void ofApp::setup(){
     for (auto &ndi : ndis) {
         ndi->bHeatmap = false;
         ndi->bGlitch = false;
+        // One-time processing setup at startup. Reconnect should not redo this.
+        ndi->setup();
     }
 
     refreshNDISources();
@@ -69,10 +71,15 @@ void ofApp::applySelectedNDISource(){
 }
 
 void ofApp::connectNDI(){
+    // Always reconnect using a fresh source list.
+    // Each NDISource uses its own manual `NDI_name` string match.
+    refreshNDISources();
 
 	for (int i = 0; i < ndis.size(); i++) {
-		ndis[i]->setup();
-		ndis[i]->connect();
+        // Do not re-run full processing setup on reconnect; only reset the NDI connection.
+        // Re-running full setup here can destabilize the stream state.
+        ndis[i]->disconnect();
+        ndis[i]->connect();
     }    
 }
 

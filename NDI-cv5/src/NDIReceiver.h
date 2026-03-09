@@ -27,6 +27,22 @@ public:
 		pixels.allocate(w, h, GL_RGBA);
 	}
 
+	string connect(const ofxNDI::Source& source) {
+		if (source.p_ndi_name.empty()) {
+			return "";
+		}
+		cout << "Try to connect to selected source: " << source.p_ndi_name << " ...";
+		receiver.disconnect();
+		bool ok = receiver.setup(source);
+		if (ok) {
+			video.setup(receiver);
+			cout << " OK! (selected)" << endl;
+			return source.p_ndi_name;
+		}
+		cout << " failed" << endl;
+		return "";
+	}
+
 	string connect(string name /*, bool highestBandwidth*/) {
 		if (name == "") {
 			return "";
@@ -42,46 +58,58 @@ public:
 		cout << "\n";
 		cout << "Try to connect to " << name << " ...";
 
-		bool found = false;
-		string longName = "";
-		string nameUpper = ofToUpper(name);
-		for (auto& s : sources) {
-			found = ofIsStringInString(ofToUpper(s.p_ndi_name), nameUpper);
-			
-			if (found) {
-				longName = s.p_ndi_name;
-				/*
+		const string nameUpper = ofToUpper(name);
+		int exactIdx = -1;
+		vector<int> containsIdx;
 
-				lowest bandwidth automatically use 640x360
-				no matter what resolution we send from OBS
-				
-				ofxNDIReceiver::Settings settings;
-				settings.bandwidth = highestBandwidth
-					? NDIlib_recv_bandwidth_highest
-					: NDIlib_recv_bandwidth_lowest;
-
-				bool ok= receiver.setup(s, settings);
-				*/
-				bool ok = receiver.setup(s);
-
-				if (ok) {
-					cout << " OK!" << '\n';
-					/*cout << "Connected with " 
-						 << (highestBandwidth ? "Highest" : "Lowest") 
-						 << " Bandwidth" << '\n';					
-					*/
-					video.setup(receiver);
-					break;
-				};
+		for (int i = 0; i < static_cast<int>(sources.size()); ++i) {
+			const string srcUpper = ofToUpper(sources[i].p_ndi_name);
+			if (srcUpper == nameUpper) {
+				exactIdx = i;
+				break;
+			}
+			if (ofIsStringInString(srcUpper, nameUpper)) {
+				containsIdx.push_back(i);
 			}
 		}
-		cout << endl;
-		if (!found) {
-			cout << " Not found" << endl;
-		}
-		cout << endl;
 
-		return longName;
+		int chosenIdx = -1;
+		string matchType = "";
+		if (exactIdx >= 0) {
+			chosenIdx = exactIdx;
+			matchType = "exact";
+		} else if (containsIdx.size() == 1) {
+			chosenIdx = containsIdx.front();
+			matchType = "contains";
+		} else if (containsIdx.size() > 1) {
+			cout << endl;
+			cout << " Ambiguous match. Please type a more specific source name." << endl;
+			for (int idx : containsIdx) {
+				cout << "  - " << sources[idx].p_ndi_name << endl;
+			}
+			cout << endl;
+			return "";
+		}
+
+		if (chosenIdx < 0) {
+			cout << endl;
+			cout << " Not found" << endl;
+			cout << endl;
+			return "";
+		}
+
+		receiver.disconnect();
+		const bool ok = receiver.setup(sources[chosenIdx]);
+		if (!ok) {
+			cout << " Found candidate, but setup failed." << endl;
+			cout << endl;
+			return "";
+		}
+
+		video.setup(receiver);
+		cout << " OK! (" << matchType << ")" << '\n';
+		cout << endl;
+		return sources[chosenIdx].p_ndi_name;
 	}
 
 	bool isConnected() {

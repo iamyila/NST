@@ -6,6 +6,8 @@ using namespace ofxNDI;
 
 bool ofxNDIReceiver::setup(size_t index, const Settings &settings)
 {
+	// Re-setup should release previous receiver resources first.
+	destroy();
 	auto &&sources = ofxNDI::listSources();
 	if(index < sources.size()) {
 		return setup(sources[index], settings);
@@ -15,6 +17,9 @@ bool ofxNDIReceiver::setup(size_t index, const Settings &settings)
 }
 bool ofxNDIReceiver::setup(const ofxNDI::Source &source, const Settings &settings)
 {
+	// Re-setup should release previous receiver resources first.
+	destroy();
+
 	NDIlib_recv_create_v3_t creator = { 
 		source, 
 		settings.color_format, 
@@ -116,6 +121,12 @@ ofxNDIReceiver::~Receiver()
 }
 
 void ofxNDIReceiver::destroy() {
-	if (frame_sync_) NDIlib_framesync_destroy(frame_sync_);
-	if (instance_) NDIlib_recv_destroy(instance_);
+	if (frame_sync_) {
+		NDIlib_framesync_destroy(frame_sync_);
+		frame_sync_ = nullptr;
+	}
+	if (instance_) {
+		NDIlib_recv_destroy(instance_);
+		instance_ = nullptr;
+	}
 }

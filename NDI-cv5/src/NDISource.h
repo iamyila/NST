@@ -40,8 +40,26 @@ public:
     }
          
 	void connect() {
-		longName = receiver.connect(NDI_name /*, ndiInHighestBandwidth*/);
+		// Reconnect should prefer the last exact resolved source name to avoid
+		// ambiguity when new NDI sources appear on the network.
+		const std::string preferred = longName.empty() ? NDI_name.get() : longName;
+		std::string resolved = receiver.connect(preferred /*, ndiInHighestBandwidth*/);
+		if (resolved.empty() && preferred != NDI_name.get()) {
+			// Fallback to current manual field if previous source is gone.
+			resolved = receiver.connect(NDI_name.get() /*, ndiInHighestBandwidth*/);
+		}
+		if (!resolved.empty()) {
+			longName = resolved;
+			NDI_name = resolved;
+		}
 	}
+
+    void connectToSource(const ofxNDI::Source& source) {
+        longName = receiver.connect(source);
+        if (longName != "") {
+            NDI_name = longName;
+        }
+    }
 
 	void disconnect() {
 		receiver.disconnect();
@@ -294,7 +312,7 @@ public:
     
     // General
     ofParameter<string> NDI_name{"NDI Source Match (Manual)", "SENDER1"};
-    ofParameter<bool> ndiIn{"NDI IN",false};
+    ofParameter<bool> ndiIn{"NDI IN",true};
     ofParameter<bool> ndiOut{"NDI OUT", false};
 	ofParameter<int> processWidth{ "Process Width", 1280, 240, 1920};
 	ofParameter<int> processHeight{ "Process Height", 720, 135, 1080};
