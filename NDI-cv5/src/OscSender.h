@@ -64,6 +64,15 @@ namespace mtb{
             
             return slot;
         }
+
+        void sendMergeEvent(int prevCount, int currentCount, int label){
+            ofxOscMessage m;
+            m.setAddress(oscMergeAddress);
+            m.addIntArg(prevCount);
+            m.addIntArg(currentCount);
+            m.addIntArg(label);
+            sender.sendMessage(m, false);
+        }
         
         int getOscAddressSlot(int label, int maxBlobNum);
         void releaseOscAddressSlot(int label);
@@ -96,6 +105,7 @@ namespace mtb{
         ofParameter<int> oscPort{"port", 12345, 0, 12345};
         // Legacy Max route object in AMXD matches symbols without a leading slash.
         const std::string oscAddressBase = "NDITracker";
+        const std::string oscMergeAddress = "NDITrackerMerge";
         ofParameterGroup grp{"OSC send", oscIp, oscPort};
         
         ofEventListeners listenerHolder;

@@ -38,17 +38,31 @@ void ofApp::setup() {
     }
 
     initShapes();
+    // Initialize periodic blink params from current slider defaults.
+    const float dutyBoost = ofLerp(-0.28f, 0.45f, ofClamp(onDutyControl, 0.05f, 0.95f));
+    const float rateScale = ofLerp(2.6f, 0.28f, ofClamp(blinkRateControl, 0.0f, 1.0f));
+    for (size_t i = 0; i < shapes.size(); ++i) {
+        auto& s = shapes[i];
+        const float basePeriod = 1.4f + 0.33f * static_cast<float>(i % 5);
+        s.blinkPeriodSec = ofClamp(basePeriod * rateScale, 0.18f, 12.0f);
+        const float baseDuty = 0.50f + 0.06f * static_cast<float>(i % 3);
+        s.blinkDuty = ofClamp(baseDuty + dutyBoost, 0.05f, 0.98f);
+    }
 }
 
 float ofApp::randomHoldDuration(bool onState) const {
     const float duty = ofClamp(onDutyControl, 0.05f, 0.95f);
-    const float switchRate = ofLerp(0.2f, 3.0f, ofClamp(blinkRateControl, 0.0f, 1.0f));
+    const float switchRate = ofLerp(0.08f, 1.8f, ofClamp(blinkRateControl, 0.0f, 1.0f));
     const float lambda = std::max(0.02f, onState ? switchRate * (1.0f - duty) : switchRate * duty);
     const float u = std::max(0.0001f, ofRandomuf());
     float sample = -std::log(1.0f - u) / lambda;
-    // Bias toward longer ON windows and shorter OFF gaps.
-    sample *= onState ? 1.35f : 0.75f;
-    return ofClamp(sample, 0.12f, 10.0f);
+    // Bias toward longer ON windows and shorter OFF gaps (for musical continuity).
+    if (onState) {
+        sample *= 3.0f;
+        return ofClamp(sample, 0.8f, 14.0f);
+    }
+    sample *= 0.35f;
+    return ofClamp(sample, 0.08f, 4.0f);
 }
 
 void ofApp::initShapes() {
@@ -67,8 +81,8 @@ void ofApp::initShapes() {
         s.motion = (i % 2 == 0) ? MotionType::Brownian : MotionType::Drunkard;
         s.bRect = (i % 3 == 0);
 
-        s.blinkPeriodSec = ofRandom(1.2f, 3.8f);
-        s.blinkDuty = ofRandom(0.35f, 0.75f);
+        s.blinkPeriodSec = ofRandom(2.0f, 5.2f);
+        s.blinkDuty = ofRandom(0.62f, 0.90f);
         s.blinkPhaseSec = ofRandom(0.0f, s.blinkPeriodSec);
         s.naturalOn = (ofRandomuf() < onDutyControl);
         s.stateRemainingSec = randomHoldDuration(s.naturalOn);
@@ -81,8 +95,10 @@ void ofApp::initShapes() {
 
 void ofApp::updateBlinkStates(float dt) {
     if (!naturalBlink || dt <= 0.0f) return;
+    // Make On/Off Rate react immediately (not only at next state transition).
+    const float rateWarp = ofLerp(0.35f, 2.8f, ofClamp(blinkRateControl, 0.0f, 1.0f));
     for (auto& s : shapes) {
-        s.stateRemainingSec -= dt;
+        s.stateRemainingSec -= dt * rateWarp;
         if (s.stateRemainingSec <= 0.0f) {
             s.naturalOn = !s.naturalOn;
             s.stateRemainingSec = randomHoldDuration(s.naturalOn);
@@ -106,12 +122,40 @@ ofRectangle ofApp::getSliderRect(int sliderIndex) const {
 }
 
 bool ofApp::handleSliderAt(int x, int y) {
+    auto applyPeriodicControls = [&]() {
+        // Periodic mode must also react to the global sliders.
+        const float dutyBoost = ofLerp(-0.28f, 0.45f, ofClamp(onDutyControl, 0.05f, 0.95f));
+        const float rateScale = ofLerp(2.6f, 0.28f, ofClamp(blinkRateControl, 0.0f, 1.0f));
+        for (size_t i = 0; i < shapes.size(); ++i) {
+            auto& s = shapes[i];
+            const float basePeriod = 1.4f + 0.33f * static_cast<float>(i % 5);
+            s.blinkPeriodSec = ofClamp(basePeriod * rateScale, 0.18f, 12.0f);
+            const float baseDuty = 0.50f + 0.06f * static_cast<float>(i % 3);
+            s.blinkDuty = ofClamp(baseDuty + dutyBoost, 0.05f, 0.98f);
+        }
+    };
+
     for (int i = 0; i < 2; ++i) {
         const ofRectangle r = getSliderRect(i);
         if (!r.inside(static_cast<float>(x), static_cast<float>(y))) continue;
         const float n = ofClamp((static_cast<float>(x) - r.getX()) / r.getWidth(), 0.0f, 1.0f);
-        if (i == 0) onDutyControl = ofLerp(0.05f, 0.95f, n);
-        else blinkRateControl = n;
+        if (i == 0) {
+            onDutyControl = ofLerp(0.05f, 0.95f, n);
+            // Immediate audible/visible response to On Duty changes.
+            for (auto& s : shapes) {
+                if (ofRandomuf() < 0.55f) {
+                    s.naturalOn = (ofRandomuf() < onDutyControl);
+                }
+                s.stateRemainingSec = randomHoldDuration(s.naturalOn);
+            }
+        } else {
+            blinkRateControl = n;
+            // Re-time all current states immediately when On/Off Rate changes.
+            for (auto& s : shapes) {
+                s.stateRemainingSec = randomHoldDuration(s.naturalOn);
+            }
+        }
+        applyPeriodicControls();
         return true;
     }
     return false;
@@ -132,16 +176,53 @@ void ofApp::applyCenterDeadZone(MovingShape& shape, float dt) {
 
     if (dist < deadZoneRadius) {
         glm::vec2 normal = offset / dist;
+        glm::vec2 tangent(-normal.y, normal.x);
+        if (glm::length(tangent) < 0.0001f) tangent = glm::vec2(0.0f, 1.0f);
+        else tangent = glm::normalize(tangent);
+
         float penetration = deadZoneRadius - dist;
         shape.pos += normal * (penetration + 1.0f);
 
-        if (shape.motion == MotionType::Brownian) {
-            shape.vel += normal * (450.0f * dt + penetration * 25.0f);
+        if (!airHockeyMode) {
+            // Normal motion mode: steer tangentially so blobs "go around" the dead zone
+            // instead of repeatedly punching through the center.
+            if (shape.motion == MotionType::Brownian) {
+                float dirSign = (glm::dot(shape.vel, tangent) >= 0.0f) ? 1.0f : -1.0f;
+                glm::vec2 t = tangent * dirSign;
+
+                // Remove inward radial energy and keep motion mostly tangential.
+                float inward = glm::dot(shape.vel, -normal);
+                if (inward > 0.0f) shape.vel += normal * (inward * 1.25f);
+
+                float tangentialSpeed = std::max(120.0f, std::abs(glm::dot(shape.vel, t)));
+                shape.vel = t * tangentialSpeed + normal * std::max(0.0f, glm::dot(shape.vel, normal)) * 0.2f;
+                shape.vel += t * (220.0f * dt + penetration * 12.0f);
+            } else {
+                float dirSign = (glm::dot(shape.walkDir, tangent) >= 0.0f) ? 1.0f : -1.0f;
+                glm::vec2 t = tangent * dirSign;
+                shape.walkDir = glm::normalize(shape.walkDir * 0.2f + t * 0.8f);
+                shape.vel += t * (180.0f * dt + penetration * 8.0f);
+            }
         } else {
-            shape.walkDir = glm::normalize(shape.walkDir + normal * 1.8f);
-            shape.vel += normal * (280.0f * dt);
+            // Air-hockey mode keeps punchy radial bounce.
+            if (shape.motion == MotionType::Brownian) {
+                shape.vel += normal * (450.0f * dt + penetration * 25.0f);
+            } else {
+                shape.walkDir = glm::normalize(shape.walkDir + normal * 1.8f);
+                shape.vel += normal * (280.0f * dt);
+            }
         }
     }
+}
+
+void ofApp::applyMagnetForce(MovingShape& shape, float dt, const glm::vec2& target) {
+    if (!magnetMode || dt <= 0.0f) return;
+    glm::vec2 toTarget = target - shape.pos;
+    float dist = glm::length(toTarget);
+    if (dist < 0.0001f) return;
+    glm::vec2 dir = toTarget / dist;
+    float falloff = ofClamp(dist / (0.45f * static_cast<float>(std::min(frameW, frameH))), 0.45f, 1.15f);
+    shape.vel += dir * (magnetStrength * 2.4f * falloff * dt);
 }
 
 void ofApp::keepInsideFrame(MovingShape& shape) {
@@ -202,8 +283,34 @@ void ofApp::keepInsideFrameAirHockey(MovingShape& shape) {
 
 void ofApp::updateShapes(float dt) {
     if (dt <= 0.0f) return;
+    const glm::vec2 frameCenter(static_cast<float>(frameW) * 0.5f, static_cast<float>(frameH) * 0.5f);
+    glm::vec2 magnetTarget = frameCenter;
+    glm::vec2 activeCentroid = frameCenter;
+    int activeCount = 0;
+    const int maxI = std::min(activeBlobLimit, static_cast<int>(shapes.size()));
+    for (int i = 0; i < maxI; ++i) {
+        if (!isShapeOn(shapes[i])) continue;
+        activeCentroid += shapes[i].pos;
+        ++activeCount;
+    }
+    if (activeCount > 0) {
+        activeCentroid /= static_cast<float>(activeCount + 1); // includes center as a gentle anchor
+    }
+    if (magnetMode) {
+        glm::vec2 sum(0.0f, 0.0f);
+        int magnetActiveCount = 0;
+        for (int i = 0; i < maxI; ++i) {
+            if (!isShapeOn(shapes[i])) continue;
+            sum += shapes[i].pos;
+            ++magnetActiveCount;
+        }
+        if (magnetActiveCount >= 2) {
+            magnetTarget = sum / static_cast<float>(magnetActiveCount);
+        }
+    }
 
-    for (auto& s : shapes) {
+    for (size_t idx = 0; idx < shapes.size(); ++idx) {
+        auto& s = shapes[idx];
         if (airHockeyMode) {
             if (!s.naturalOn) {
                 s.stateRemainingSec -= dt;
@@ -217,6 +324,7 @@ void ofApp::updateShapes(float dt) {
             // Air-hockey feel: very low drag, keeps inertia after hits.
             s.vel *= std::pow(0.9992f, dt * 60.0f);
 
+            applyMagnetForce(s, dt, magnetTarget);
             applyCenterDeadZone(s, dt);
             keepInsideFrameAirHockey(s);
 
@@ -229,7 +337,34 @@ void ofApp::updateShapes(float dt) {
             continue;
         }
 
-        if (s.motion == MotionType::Brownian) {
+        if (!bUseBrownianDrunkMotion) {
+            // Dedicated NORMAL mode: smooth orbital flow (distinct from Brownian/Drunkard).
+            const glm::vec2 center(static_cast<float>(frameW) * 0.5f, static_cast<float>(frameH) * 0.5f);
+            glm::vec2 fromCenter = s.pos - center;
+            float r = glm::length(fromCenter);
+            if (r < 0.001f) fromCenter = glm::vec2(1.0f, 0.0f), r = 1.0f;
+            glm::vec2 radial = fromCenter / r;
+            glm::vec2 tangent(-radial.y, radial.x);
+
+            const float i = static_cast<float>(idx);
+            const float desiredRadius = ofLerp(90.0f, 240.0f, std::fmod(i * 0.173f, 1.0f));
+            const float radialErr = desiredRadius - r;
+            const glm::vec2 orbitForce = tangent * 180.0f;
+            const glm::vec2 radialForce = radial * (radialErr * 2.0f);
+            const glm::vec2 drift(
+                ofSignedNoise(simTime * 0.25f + i * 0.91f),
+                ofSignedNoise(simTime * 0.21f + i * 1.37f)
+            );
+
+            s.vel += (orbitForce + radialForce + drift * 20.0f) * dt;
+            s.vel *= std::pow(0.992f, dt * 60.0f);
+
+            float spd = glm::length(s.vel);
+            if (spd < 45.0f) s.vel = glm::normalize(s.vel + glm::vec2(0.0001f, 0.0f)) * 45.0f;
+            else if (spd > 120.0f) s.vel = glm::normalize(s.vel) * 120.0f;
+
+            s.pos += s.vel * dt;
+        } else if (s.motion == MotionType::Brownian) {
             const glm::vec2 jitter(ofRandomf() * 900.0f, ofRandomf() * 900.0f);
             const glm::vec2 toCenter(
                 static_cast<float>(frameW) * 0.5f - s.pos.x,
@@ -265,6 +400,18 @@ void ofApp::updateShapes(float dt) {
             s.pos += s.vel * dt;
         }
 
+        if (activeCount >= 2 && isShapeOn(s)) {
+            glm::vec2 toCentroid = activeCentroid - s.pos;
+            float distToCentroid = glm::length(toCentroid);
+            if (distToCentroid > 0.001f) {
+                glm::vec2 dirToCentroid = toCentroid / distToCentroid;
+                // Stronger cohesion in normal mode so grouping is visually obvious.
+                float pull = std::min(520.0f, distToCentroid * 1.05f);
+                s.vel += dirToCentroid * (pull * dt);
+            }
+        }
+
+        applyMagnetForce(s, dt, magnetTarget);
         applyCenterDeadZone(s, dt);
         keepInsideFrame(s);
     }
@@ -286,6 +433,7 @@ void ofApp::applyBlobRepulsion(float dt) {
     if (!collisionPhysics || dt <= 0.0f) return;
     const int n = static_cast<int>(shapes.size());
     const float restitution = airHockeyMode ? 0.98f : 0.90f;
+    const float collisionScale = magnetMode ? 0.35f : 1.0f;
     for (int i = 0; i < n; ++i) {
         if (!isShapeOn(shapes[i])) continue;
         for (int j = i + 1; j < n; ++j) {
@@ -309,7 +457,7 @@ void ofApp::applyBlobRepulsion(float dt) {
                 float jImpulse = -(1.0f + restitution) * relNormalSpeed;
                 jImpulse /= (invM1 + invM2);
                 // Keep artistic control from collisionStrength.
-                jImpulse *= (collisionStrength / 1200.0f);
+                jImpulse *= (collisionStrength / 1200.0f) * collisionScale;
                 const glm::vec2 impulse = jImpulse * nrm;
                 shapes[i].vel += impulse * invM1;
                 shapes[j].vel -= impulse * invM2;
@@ -363,49 +511,24 @@ void ofApp::renderFrame() {
     ofFill();
 
     int considered = 0;
-    if (bUseBrownianDrunkMotion) {
-        for (int i = 0; i < static_cast<int>(shapes.size()); ++i) {
-            if (considered >= activeBlobLimit) break;
-            considered++;
+    const int limit = bUseBrownianDrunkMotion ? static_cast<int>(shapes.size()) : std::min(5, static_cast<int>(shapes.size()));
+    for (int i = 0; i < limit; ++i) {
+        if (considered >= activeBlobLimit) break;
+        considered++;
 
-            const auto& s = shapes[i];
-            if (!isShapeOn(s)) continue;
+        const auto& s = shapes[i];
+        if (!isShapeOn(s)) continue;
 
-            ofSetColor(s.color);
-            if (s.bRect) {
-                ofPushMatrix();
-                ofTranslate(s.pos);
-                ofRotateDeg(ofSignedNoise(simTime * 0.6f + i) * 35.0f);
-                float size = s.radius * 1.9f;
-                ofDrawRectangle(-size * 0.5f, -size * 0.5f, size, size);
-                ofPopMatrix();
-            } else {
-                ofDrawCircle(s.pos.x, s.pos.y, s.radius);
-            }
-        }
-    } else {
-        for (int i = 0; i < 5; ++i) {
-            if (considered >= activeBlobLimit) break;
-            considered++;
-
-            float period = 1.2f + 0.35f * static_cast<float>(i);
-            float duty = 0.45f + 0.08f * static_cast<float>(i % 3);
-            float t = fmodf(simTime + 0.47f * static_cast<float>(i), period);
-            bool on = t < (period * duty);
-            if (!on) continue;
-
-            float phase = simTime * (0.7f + 0.2f * i) + i * 1.2f;
-            float x = ofMap(sinf(phase), -1.0f, 1.0f, 80.0f, frameW - 80.0f);
-            float y = ofMap(cosf(phase * 1.37f), -1.0f, 1.0f, 80.0f, frameH - 80.0f);
-            float r = 22.0f + 10.0f * i;
-
-            if (i == 4) {
-                ofSetColor(245, 90, 40);
-                ofDrawRectangle(x - 90.0f, y - 60.0f, 180, 110);
-            } else {
-                ofSetColor(40 + i * 45, 200 - i * 25, 255 - i * 35);
-                ofDrawCircle(x, y, r);
-            }
+        ofSetColor(s.color);
+        if (s.bRect) {
+            ofPushMatrix();
+            ofTranslate(s.pos);
+            ofRotateDeg(ofSignedNoise(simTime * 0.6f + i) * 35.0f);
+            float size = s.radius * 1.9f;
+            ofDrawRectangle(-size * 0.5f, -size * 0.5f, size, size);
+            ofPopMatrix();
+        } else {
+            ofDrawCircle(s.pos.x, s.pos.y, s.radius);
         }
     }
 
@@ -427,7 +550,8 @@ void ofApp::update() {
     if (!airHockeyMode) {
         updateBlinkStates(dt);
     }
-    if (bUseBrownianDrunkMotion) updateShapes(dt);
+    // Shape simulation now drives both motion modes.
+    updateShapes(dt);
 
     simTime += dt;
     renderFrame();
@@ -458,6 +582,7 @@ void ofApp::draw() {
         std::string("Bounds: ") + (squareMotionBounds ? "Square" : "Frame") +
         " | Edge: " + (edgeBounce ? "Bounce" : "Wrap") +
         " | Dead zone: " + std::string(deadZoneEnabled ? (ofToString(centerDeadZoneNorm * 100.0f, 0) + "%") : "OFF") +
+        " | Magnet: " + std::string(magnetMode ? ("On@" + ofToString(magnetStrength, 0)) : "Off") +
         " | Physics: " + std::string(collisionPhysics ? "On" : "Off") +
         " | Coll: " + ofToString(collisionStrength, 0) +
         " | Blink: " + std::string(airHockeyMode ? "Inertia Respawn" : (naturalBlink ? "Natural" : "Periodic")) +
@@ -467,9 +592,11 @@ void ofApp::draw() {
     if (!manualBlobInput.empty()) {
         ofDrawBitmapStringHighlight("Manual blob input: " + manualBlobInput + " (press Enter)", 20, 164);
     }
-    ofDrawBitmapStringHighlight("Keys: m motion, h air-hockey, b auto blobs, n natural/periodic", 20, 184);
-    ofDrawBitmapStringHighlight("Keys: 0-10 + Enter, [ ] count, +/- speed, e bounce, q square, d dead-zone on/off, z/x dead zone size", 20, 202);
-    ofDrawBitmapStringHighlight("Keys: p physics, c/v collision, mouse drag push, space pause, r reset", 20, 220);
+    ofDrawBitmapStringHighlight("Mode: [m] normal/brownian, [h] air-hockey, [n] natural/periodic blink", 20, 184);
+    ofDrawBitmapStringHighlight("Count: [b] auto, [0-10]+Enter manual, [[]/[]] +/-1 blob", 20, 202);
+    ofDrawBitmapStringHighlight("Motion: [k] magnet, [,/.] magnet strength, [p] physics, [c/v] collision strength", 20, 220);
+    ofDrawBitmapStringHighlight("Bounds: [e] edge bounce, [d] dead-zone on/off, [z/x] dead-zone size, [q] square bounds", 20, 238);
+    ofDrawBitmapStringHighlight("Transport: [space] pause, [+/-] speed, [r] reset, mouse-drag push", 20, 256);
 
     const ofRectangle dutyRect = getSliderRect(0);
     const ofRectangle rateRect = getSliderRect(1);
@@ -521,7 +648,22 @@ void ofApp::keyPressed(int key) {
     if (key == '+' || key == '=') speed = std::min(4.0f, speed + 0.1f);
     else if (key == '-' || key == '_') speed = std::max(0.1f, speed - 0.1f);
     else if (key == 'b' || key == 'B') autoBlobCount = !autoBlobCount;
-    else if (key == 'n' || key == 'N') naturalBlink = !naturalBlink;
+    else if (key == 'n' || key == 'N') {
+        naturalBlink = !naturalBlink;
+        const float dutyBoost = ofLerp(-0.28f, 0.45f, ofClamp(onDutyControl, 0.05f, 0.95f));
+        const float rateScale = ofLerp(2.6f, 0.28f, ofClamp(blinkRateControl, 0.0f, 1.0f));
+        for (size_t i = 0; i < shapes.size(); ++i) {
+            auto& s = shapes[i];
+            const float basePeriod = 1.4f + 0.33f * static_cast<float>(i % 5);
+            s.blinkPeriodSec = ofClamp(basePeriod * rateScale, 0.18f, 12.0f);
+            const float baseDuty = 0.50f + 0.06f * static_cast<float>(i % 3);
+            s.blinkDuty = ofClamp(baseDuty + dutyBoost, 0.05f, 0.98f);
+            if (naturalBlink) {
+                s.stateRemainingSec = randomHoldDuration(s.naturalOn);
+            }
+        }
+    }
+    else if (key == 'k' || key == 'K') magnetMode = !magnetMode;
     else if (key == 'h' || key == 'H') {
         airHockeyMode = !airHockeyMode;
         for (auto& s : shapes) {
@@ -544,6 +686,8 @@ void ofApp::keyPressed(int key) {
     else if (key == 'x' || key == 'X') { centerDeadZoneNorm = std::min(0.45f, centerDeadZoneNorm + 0.02f); deadZoneEnabled = true; }
     else if (key == 'z' || key == 'Z') { centerDeadZoneNorm = std::max(0.0f, centerDeadZoneNorm - 0.02f); if (centerDeadZoneNorm <= 0.0001f) deadZoneEnabled = false; }
     else if (key == 'p' || key == 'P') collisionPhysics = !collisionPhysics;
+    else if (key == ',') magnetStrength = std::max(50.0f, magnetStrength - 50.0f);
+    else if (key == '.') magnetStrength = std::min(3000.0f, magnetStrength + 50.0f);
     else if (key == 'c' || key == 'C') collisionStrength = std::max(100.0f, collisionStrength - 100.0f);
     else if (key == 'v' || key == 'V') collisionStrength = std::min(6000.0f, collisionStrength + 100.0f);
     else if (key == 'r' || key == 'R') { initShapes(); simTime = 0.0f; }

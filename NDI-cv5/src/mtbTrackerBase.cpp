@@ -31,6 +31,10 @@ namespace mtb{
         return user->oscSender.sendVal(label, maxBlobNum, vel, area, age, center, inputSize);
     }
 
+    void mtbTrackerBase::sendMergeEvent(int prevCount, int currentCount, int label){
+        user->oscSender.sendMergeEvent(prevCount, currentCount, label);
+    }
+
     void mtbTrackerBase::beginOscFrame(){
         user->oscSender.beginFrame();
     }

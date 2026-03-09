@@ -50,6 +50,7 @@ private:
     void keepInsideFrame(MovingShape& shape);
     void keepInsideFrameAirHockey(MovingShape& shape);
     void applyCenterDeadZone(MovingShape& shape, float dt);
+    void applyMagnetForce(MovingShape& shape, float dt, const glm::vec2& target);
     void applyBlobRepulsion(float dt);
     void applyPushField(const glm::vec2& pt, float strength);
     void resetShapeForAirHockey(MovingShape& s);
@@ -88,6 +89,8 @@ private:
     bool naturalBlink = true;
     float onDutyControl = 0.72f;
     float blinkRateControl = 0.30f;
+    bool magnetMode = false;
+    float magnetStrength = 720.0f;
 
     void commitManualBlobInput();
 };

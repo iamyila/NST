@@ -167,6 +167,12 @@ namespace mtb{
 
                 if(selectedBlobs.size() >= maxBlobNum) break;
             }
+
+            // Special merge event: previous frame had 2+ blobs and current frame collapsed to 1.
+            if (prevSelectedBlobCount >= 2 && static_cast<int>(selectedBlobs.size()) == 1) {
+                sendMergeEvent(prevSelectedBlobCount, static_cast<int>(selectedBlobs.size()), selectedBlobs[0]);
+            }
+            prevSelectedBlobCount = static_cast<int>(selectedBlobs.size());
             
             // Process Dead blobs, just mark bDead
             auto & deads = tracker.getDeadLabels();
