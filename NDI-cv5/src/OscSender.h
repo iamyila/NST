@@ -65,6 +65,16 @@ namespace mtb{
             return slot;
         }
 
+        // When only one blob is visible, pin it to slot 1 to avoid note/slot drift
+        // from tracker label churn.
+        void forceSingleLabelToSlot1(int label){
+            labelToSlot.clear();
+            labelLastSeenFrame.clear();
+            labelToSlot[label] = 1;
+            labelLastSeenFrame[label] = frameCounter;
+            fallbackRoundRobinSlot = 1;
+        }
+
         void sendMergeEvent(int prevCount, int currentCount, int label){
             ofxOscMessage m;
             m.setAddress(oscMergeAddress);

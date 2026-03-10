@@ -38,5 +38,9 @@ namespace mtb{
     void mtbTrackerBase::beginOscFrame(){
         user->oscSender.beginFrame();
     }
+
+    void mtbTrackerBase::forceSingleBlobSlot1(int label){
+        user->oscSender.forceSingleLabelToSlot1(label);
+    }
     
 }

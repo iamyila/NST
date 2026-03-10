@@ -101,6 +101,7 @@ namespace mtb{
         int sendVal(int label, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize);
         void sendMergeEvent(int prevCount, int currentCount, int label);
         void beginOscFrame();
+        void forceSingleBlobSlot1(int label);
 
         // UI is strictness-based: higher values are stricter (shorter hold / smaller match distance).
         int getTrackHoldFrames() const {

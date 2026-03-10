@@ -111,6 +111,11 @@ namespace mtb{
                     return ageA > ageB;
                 });
             }
+
+            // Hard-stabilize single-blob routing: one visible blob must always map to slot 1.
+            if (currs.size() == 1) {
+                forceSingleBlobSlot1(currs[0]);
+            }
             
             auto itrC = currs.begin();
 

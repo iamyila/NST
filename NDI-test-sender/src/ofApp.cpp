@@ -38,7 +38,11 @@ void ofApp::setup() {
     }
 
     initShapes();
-    // Initialize periodic blink params from current slider defaults.
+    applyPeriodicBlinkControls();
+    loadPresetFile();
+}
+
+void ofApp::applyPeriodicBlinkControls() {
     const float dutyBoost = ofLerp(-0.28f, 0.45f, ofClamp(onDutyControl, 0.05f, 0.95f));
     const float rateScale = ofLerp(2.6f, 0.28f, ofClamp(blinkRateControl, 0.0f, 1.0f));
     for (size_t i = 0; i < shapes.size(); ++i) {
@@ -121,20 +125,35 @@ ofRectangle ofApp::getSliderRect(int sliderIndex) const {
     return ofRectangle(x, y0 + sliderIndex * 24.0f, w, h);
 }
 
-bool ofApp::handleSliderAt(int x, int y) {
-    auto applyPeriodicControls = [&]() {
-        // Periodic mode must also react to the global sliders.
-        const float dutyBoost = ofLerp(-0.28f, 0.45f, ofClamp(onDutyControl, 0.05f, 0.95f));
-        const float rateScale = ofLerp(2.6f, 0.28f, ofClamp(blinkRateControl, 0.0f, 1.0f));
-        for (size_t i = 0; i < shapes.size(); ++i) {
-            auto& s = shapes[i];
-            const float basePeriod = 1.4f + 0.33f * static_cast<float>(i % 5);
-            s.blinkPeriodSec = ofClamp(basePeriod * rateScale, 0.18f, 12.0f);
-            const float baseDuty = 0.50f + 0.06f * static_cast<float>(i % 3);
-            s.blinkDuty = ofClamp(baseDuty + dutyBoost, 0.05f, 0.98f);
-        }
-    };
+ofRectangle ofApp::getPresetCellRect(int row, int col) const {
+    const float cellW = 74.0f;
+    const float cellH = 18.0f;
+    const float gap = 8.0f;
+    const float totalW = 4.0f * cellW + 3.0f * gap;
+    const float x0 = static_cast<float>(ofGetWidth()) - 20.0f - totalW + col * (cellW + gap);
+    const float y0 = static_cast<float>(ofGetHeight()) - 92.0f + row * (cellH + 6.0f);
+    return ofRectangle(x0, y0, cellW, cellH);
+}
 
+bool ofApp::handlePresetGridAt(int x, int y) {
+    const float xf = static_cast<float>(x);
+    const float yf = static_cast<float>(y);
+    for (int col = 0; col < 4; ++col) {
+        const ofRectangle loadR = getPresetCellRect(0, col);
+        if (loadR.inside(xf, yf)) {
+            loadPresetSlot(col);
+            return true;
+        }
+        const ofRectangle saveR = getPresetCellRect(1, col);
+        if (saveR.inside(xf, yf)) {
+            savePresetSlot(col);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ofApp::handleSliderAt(int x, int y) {
     for (int i = 0; i < 2; ++i) {
         const ofRectangle r = getSliderRect(i);
         if (!r.inside(static_cast<float>(x), static_cast<float>(y))) continue;
@@ -155,7 +174,7 @@ bool ofApp::handleSliderAt(int x, int y) {
                 s.stateRemainingSec = randomHoldDuration(s.naturalOn);
             }
         }
-        applyPeriodicControls();
+        applyPeriodicBlinkControls();
         return true;
     }
     return false;
@@ -166,21 +185,40 @@ void ofApp::applyCenterDeadZone(MovingShape& shape, float dt) {
 
     const float shortestSide = static_cast<float>(std::min(frameW, frameH));
     const float deadZoneRadius = centerDeadZoneNorm * shortestSide;
+    // Keep a hard buffer so mapped panner values don't drift too close to center.
+    const float guardRadius = deadZoneRadius + std::max(8.0f, shape.radius * 0.35f);
+    // Horizontal-first dead zone with guaranteed top/bottom lanes.
+    // This keeps center avoidance strong while allowing blobs to pass above/below.
+    const float deadZoneRx = guardRadius * 1.15f;
+    const float maxRy = std::max(24.0f, static_cast<float>(frameH) * 0.5f - 70.0f - shape.radius);
+    const float deadZoneRy = std::min(guardRadius * 0.55f, maxRy);
     const glm::vec2 center(static_cast<float>(frameW) * 0.5f, static_cast<float>(frameH) * 0.5f);
     glm::vec2 offset = shape.pos - center;
-    float dist = glm::length(offset);
-    if (dist < 0.0001f) {
+
+    float ex = offset.x / std::max(1.0f, deadZoneRx);
+    float ey = offset.y / std::max(1.0f, deadZoneRy);
+    float q = ex * ex + ey * ey;
+    if (q < 0.0001f) {
         offset = glm::vec2(1.0f, 0.0f);
-        dist = 0.0001f;
+        ex = 1.0f;
+        ey = 0.0f;
+        q = 0.0001f;
     }
 
-    if (dist < deadZoneRadius) {
-        glm::vec2 normal = offset / dist;
+    if (q < 1.0f) {
+        // Ellipse normal
+        glm::vec2 normal(offset.x / (deadZoneRx * deadZoneRx), offset.y / (deadZoneRy * deadZoneRy));
+        float nlen = glm::length(normal);
+        if (nlen < 0.0001f) normal = glm::vec2(1.0f, 0.0f);
+        else normal /= nlen;
         glm::vec2 tangent(-normal.y, normal.x);
         if (glm::length(tangent) < 0.0001f) tangent = glm::vec2(0.0f, 1.0f);
         else tangent = glm::normalize(tangent);
 
-        float penetration = deadZoneRadius - dist;
+        // Push to ellipse boundary + tiny margin.
+        const float scaleToBoundary = 1.0f / std::sqrt(std::max(0.0001f, q));
+        glm::vec2 boundary = offset * scaleToBoundary;
+        const float penetration = glm::length(boundary - offset);
         shape.pos += normal * (penetration + 1.0f);
 
         if (!airHockeyMode) {
@@ -503,9 +541,11 @@ void ofApp::renderFrame() {
 
     if (deadZoneEnabled && centerDeadZoneNorm > 0.0001f) {
         float deadZoneRadius = centerDeadZoneNorm * static_cast<float>(std::min(frameW, frameH));
+        float deadZoneRx = deadZoneRadius * 1.15f;
+        float deadZoneRy = std::min(deadZoneRadius * 0.55f, std::max(24.0f, static_cast<float>(frameH) * 0.5f - 70.0f));
         ofNoFill();
         ofSetColor(255, 80, 80, 130);
-        ofDrawCircle(static_cast<float>(frameW) * 0.5f, static_cast<float>(frameH) * 0.5f, deadZoneRadius);
+        ofDrawEllipse(static_cast<float>(frameW) * 0.5f, static_cast<float>(frameH) * 0.5f, deadZoneRx * 2.0f, deadZoneRy * 2.0f);
     }
 
     ofFill();
@@ -597,6 +637,32 @@ void ofApp::draw() {
     ofDrawBitmapStringHighlight("Motion: [k] magnet, [,/.] magnet strength, [p] physics, [c/v] collision strength", 20, 220);
     ofDrawBitmapStringHighlight("Bounds: [e] edge bounce, [d] dead-zone on/off, [z/x] dead-zone size, [q] square bounds", 20, 238);
     ofDrawBitmapStringHighlight("Transport: [space] pause, [+/-] speed, [r] reset, mouse-drag push", 20, 256);
+    ofDrawBitmapStringHighlight("Presets: click LOAD/SAVE buttons (slots 1-4)", 20, 274);
+    if (!presetStatus.empty() && ofGetElapsedTimef() <= presetStatusUntil) {
+        ofDrawBitmapStringHighlight(presetStatus, 20, 292);
+    }
+
+    for (int col = 0; col < 4; ++col) {
+        const bool valid = presetSlots[col].valid;
+        const ofRectangle loadR = getPresetCellRect(0, col);
+        const ofRectangle saveR = getPresetCellRect(1, col);
+
+        ofSetColor(valid ? ofColor(30, 170, 90, 180) : ofColor(65, 65, 65, 180));
+        ofDrawRectangle(loadR);
+        ofSetColor(255);
+        ofNoFill();
+        ofDrawRectangle(loadR);
+        ofFill();
+        ofDrawBitmapStringHighlight("L" + ofToString(col + 1), loadR.getX() + 26.0f, loadR.getY() + 13.0f);
+
+        ofSetColor(140, 85, 25, 190);
+        ofDrawRectangle(saveR);
+        ofSetColor(255);
+        ofNoFill();
+        ofDrawRectangle(saveR);
+        ofFill();
+        ofDrawBitmapStringHighlight("S" + ofToString(col + 1), saveR.getX() + 26.0f, saveR.getY() + 13.0f);
+    }
 
     const ofRectangle dutyRect = getSliderRect(0);
     const ofRectangle rateRect = getSliderRect(1);
@@ -650,14 +716,8 @@ void ofApp::keyPressed(int key) {
     else if (key == 'b' || key == 'B') autoBlobCount = !autoBlobCount;
     else if (key == 'n' || key == 'N') {
         naturalBlink = !naturalBlink;
-        const float dutyBoost = ofLerp(-0.28f, 0.45f, ofClamp(onDutyControl, 0.05f, 0.95f));
-        const float rateScale = ofLerp(2.6f, 0.28f, ofClamp(blinkRateControl, 0.0f, 1.0f));
-        for (size_t i = 0; i < shapes.size(); ++i) {
-            auto& s = shapes[i];
-            const float basePeriod = 1.4f + 0.33f * static_cast<float>(i % 5);
-            s.blinkPeriodSec = ofClamp(basePeriod * rateScale, 0.18f, 12.0f);
-            const float baseDuty = 0.50f + 0.06f * static_cast<float>(i % 3);
-            s.blinkDuty = ofClamp(baseDuty + dutyBoost, 0.05f, 0.98f);
+        applyPeriodicBlinkControls();
+        for (auto& s : shapes) {
             if (naturalBlink) {
                 s.stateRemainingSec = randomHoldDuration(s.naturalOn);
             }
@@ -693,8 +753,137 @@ void ofApp::keyPressed(int key) {
     else if (key == 'r' || key == 'R') { initShapes(); simTime = 0.0f; }
 }
 
+ofApp::SenderPreset ofApp::captureCurrentPreset() const {
+    SenderPreset p;
+    p.valid = true;
+    p.speed = speed;
+    p.bUseBrownianDrunkMotion = bUseBrownianDrunkMotion;
+    p.airHockeyMode = airHockeyMode;
+    p.autoBlobCount = autoBlobCount;
+    p.manualBlobCount = manualBlobCount;
+    p.edgeBounce = edgeBounce;
+    p.squareMotionBounds = squareMotionBounds;
+    p.deadZoneEnabled = deadZoneEnabled;
+    p.centerDeadZoneNorm = centerDeadZoneNorm;
+    p.collisionPhysics = collisionPhysics;
+    p.collisionStrength = collisionStrength;
+    p.naturalBlink = naturalBlink;
+    p.onDutyControl = onDutyControl;
+    p.blinkRateControl = blinkRateControl;
+    p.magnetMode = magnetMode;
+    p.magnetStrength = magnetStrength;
+    return p;
+}
+
+void ofApp::applyPreset(const SenderPreset& p) {
+    speed = p.speed;
+    bUseBrownianDrunkMotion = p.bUseBrownianDrunkMotion;
+    airHockeyMode = p.airHockeyMode;
+    autoBlobCount = p.autoBlobCount;
+    manualBlobCount = ofClamp(p.manualBlobCount, 0, 10);
+    edgeBounce = p.edgeBounce;
+    squareMotionBounds = p.squareMotionBounds;
+    deadZoneEnabled = p.deadZoneEnabled;
+    centerDeadZoneNorm = ofClamp(p.centerDeadZoneNorm, 0.0f, 0.45f);
+    collisionPhysics = p.collisionPhysics;
+    collisionStrength = ofClamp(p.collisionStrength, 100.0f, 6000.0f);
+    naturalBlink = p.naturalBlink;
+    onDutyControl = ofClamp(p.onDutyControl, 0.05f, 0.95f);
+    blinkRateControl = ofClamp(p.blinkRateControl, 0.0f, 1.0f);
+    magnetMode = p.magnetMode;
+    magnetStrength = ofClamp(p.magnetStrength, 50.0f, 3000.0f);
+
+    applyPeriodicBlinkControls();
+    for (auto& s : shapes) {
+        s.stateRemainingSec = randomHoldDuration(s.naturalOn);
+    }
+}
+
+void ofApp::savePresetFile() const {
+    ofJson j;
+    j["slots"] = ofJson::array();
+    for (int i = 0; i < static_cast<int>(presetSlots.size()); ++i) {
+        const SenderPreset& p = presetSlots[i];
+        ofJson s;
+        s["valid"] = p.valid;
+        s["speed"] = p.speed;
+        s["bUseBrownianDrunkMotion"] = p.bUseBrownianDrunkMotion;
+        s["airHockeyMode"] = p.airHockeyMode;
+        s["autoBlobCount"] = p.autoBlobCount;
+        s["manualBlobCount"] = p.manualBlobCount;
+        s["edgeBounce"] = p.edgeBounce;
+        s["squareMotionBounds"] = p.squareMotionBounds;
+        s["deadZoneEnabled"] = p.deadZoneEnabled;
+        s["centerDeadZoneNorm"] = p.centerDeadZoneNorm;
+        s["collisionPhysics"] = p.collisionPhysics;
+        s["collisionStrength"] = p.collisionStrength;
+        s["naturalBlink"] = p.naturalBlink;
+        s["onDutyControl"] = p.onDutyControl;
+        s["blinkRateControl"] = p.blinkRateControl;
+        s["magnetMode"] = p.magnetMode;
+        s["magnetStrength"] = p.magnetStrength;
+        j["slots"].push_back(s);
+    }
+    ofSavePrettyJson(ofToDataPath("sender_slots.json", true), j);
+}
+
+void ofApp::loadPresetFile() {
+    const std::string path = ofToDataPath("sender_slots.json", true);
+    if (!ofFile::doesFileExist(path)) return;
+
+    ofJson j = ofLoadJson(path);
+    if (!j.contains("slots") || !j["slots"].is_array()) return;
+
+    const auto& arr = j["slots"];
+    for (int i = 0; i < static_cast<int>(presetSlots.size()) && i < static_cast<int>(arr.size()); ++i) {
+        const ofJson& s = arr[i];
+        SenderPreset p;
+        p.valid = s.value("valid", false);
+        p.speed = s.value("speed", p.speed);
+        p.bUseBrownianDrunkMotion = s.value("bUseBrownianDrunkMotion", p.bUseBrownianDrunkMotion);
+        p.airHockeyMode = s.value("airHockeyMode", p.airHockeyMode);
+        p.autoBlobCount = s.value("autoBlobCount", p.autoBlobCount);
+        p.manualBlobCount = s.value("manualBlobCount", p.manualBlobCount);
+        p.edgeBounce = s.value("edgeBounce", p.edgeBounce);
+        p.squareMotionBounds = s.value("squareMotionBounds", p.squareMotionBounds);
+        p.deadZoneEnabled = s.value("deadZoneEnabled", p.deadZoneEnabled);
+        p.centerDeadZoneNorm = s.value("centerDeadZoneNorm", p.centerDeadZoneNorm);
+        p.collisionPhysics = s.value("collisionPhysics", p.collisionPhysics);
+        p.collisionStrength = s.value("collisionStrength", p.collisionStrength);
+        p.naturalBlink = s.value("naturalBlink", p.naturalBlink);
+        p.onDutyControl = s.value("onDutyControl", p.onDutyControl);
+        p.blinkRateControl = s.value("blinkRateControl", p.blinkRateControl);
+        p.magnetMode = s.value("magnetMode", p.magnetMode);
+        p.magnetStrength = s.value("magnetStrength", p.magnetStrength);
+        presetSlots[i] = p;
+    }
+}
+
+void ofApp::savePresetSlot(int slotIndex) {
+    if (slotIndex < 0 || slotIndex >= static_cast<int>(presetSlots.size())) return;
+    presetSlots[slotIndex] = captureCurrentPreset();
+    currentPresetSlot = slotIndex;
+    presetStatus = "Saved sender state to slot " + ofToString(slotIndex + 1);
+    presetStatusUntil = ofGetElapsedTimef() + 2.0f;
+    savePresetFile();
+}
+
+void ofApp::loadPresetSlot(int slotIndex) {
+    if (slotIndex < 0 || slotIndex >= static_cast<int>(presetSlots.size())) return;
+    if (!presetSlots[slotIndex].valid) {
+        presetStatus = "Slot " + ofToString(slotIndex + 1) + " is empty";
+        presetStatusUntil = ofGetElapsedTimef() + 2.0f;
+        return;
+    }
+    applyPreset(presetSlots[slotIndex]);
+    currentPresetSlot = slotIndex;
+    presetStatus = "Loaded sender state from slot " + ofToString(slotIndex + 1);
+    presetStatusUntil = ofGetElapsedTimef() + 2.0f;
+}
+
 void ofApp::mousePressed(int x, int y, int button) {
     (void)button;
+    if (handlePresetGridAt(x, y)) return;
     if (handleSliderAt(x, y)) return;
     const float sx = static_cast<float>(frameW) / std::max(1.0f, static_cast<float>(ofGetWidth()));
     const float sy = static_cast<float>(frameH) / std::max(1.0f, static_cast<float>(ofGetHeight()));

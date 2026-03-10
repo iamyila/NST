@@ -3,6 +3,7 @@
 #include "ofMain.h"
 #include "ofxNDISender.h"
 #include "ofxNDISendStream.h"
+#include <array>
 #include <string>
 
 class ofApp : public ofBaseApp {
@@ -43,6 +44,26 @@ private:
         float lowSpeedAccumSec = 0.0f;
     };
 
+    struct SenderPreset {
+        bool valid = false;
+        float speed = 1.0f;
+        bool bUseBrownianDrunkMotion = true;
+        bool airHockeyMode = false;
+        bool autoBlobCount = true;
+        int manualBlobCount = 3;
+        bool edgeBounce = true;
+        bool squareMotionBounds = false;
+        bool deadZoneEnabled = false;
+        float centerDeadZoneNorm = 0.0f;
+        bool collisionPhysics = true;
+        float collisionStrength = 1200.0f;
+        bool naturalBlink = true;
+        float onDutyControl = 0.72f;
+        float blinkRateControl = 0.30f;
+        bool magnetMode = false;
+        float magnetStrength = 720.0f;
+    };
+
     void initShapes();
     void updateShapes(float dt);
     void updateBlinkStates(float dt);
@@ -57,8 +78,17 @@ private:
     float randomHoldDuration(bool onState) const;
     ofRectangle getSliderRect(int sliderIndex) const;
     bool handleSliderAt(int x, int y);
+    bool handlePresetGridAt(int x, int y);
+    ofRectangle getPresetCellRect(int row, int col) const;
     bool isShapeOn(const MovingShape& shape) const;
     void renderFrame();
+    void applyPeriodicBlinkControls();
+    void savePresetSlot(int slotIndex);
+    void loadPresetSlot(int slotIndex);
+    void applyPreset(const SenderPreset& p);
+    SenderPreset captureCurrentPreset() const;
+    void savePresetFile() const;
+    void loadPresetFile();
 
     ofxNDISender ndiSender;
     ofxNDISendVideo ndiVideo;
@@ -91,6 +121,10 @@ private:
     float blinkRateControl = 0.30f;
     bool magnetMode = false;
     float magnetStrength = 720.0f;
+    std::array<SenderPreset, 4> presetSlots;
+    int currentPresetSlot = -1;
+    std::string presetStatus;
+    float presetStatusUntil = 0.0f;
 
     void commitManualBlobInput();
 };
