@@ -70,6 +70,10 @@ namespace mtb{
     }
 
     void OscSender::releaseOscAddressSlot(int label){
+        auto it = labelToSlot.find(label);
+        if (it != labelToSlot.end()) {
+            lastLabelBySlot.erase(it->second);
+        }
         labelToSlot.erase(label);
         labelLastSeenFrame.erase(label);
     }

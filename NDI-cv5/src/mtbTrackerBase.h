@@ -146,16 +146,16 @@ namespace mtb{
         ofParameter<float> maxArea{ "maxArea", 350, 0, 500 };
         ofParameter<bool> bFindHoles{ "find holes", false };
         ofParameter<bool> bSimplify{ "simplify", false };
-        ofParameter<float> trackHoldStrictness{ "Track Hold Strictness (0 normal, 100 strict)", 20, 0, 100 };
-        ofParameter<float> trackMatchStrictness{ "Track Match Strictness (0 normal, 100 strict)", 20, 0, 100 };
+        ofParameter<float> trackHoldStrictness{ "Track Hold Strictness (0 normal, 100 strict)", 10, 0, 100 };
+        ofParameter<float> trackMatchStrictness{ "Track Match Strictness (0 normal, 100 strict)", 10, 0, 100 };
         //ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
         ofParameter<int> maxBlobCandidate{ "Max blob candidate", 10, 1, 100 };
         ofParameter<bool> bDrawCandidates{ "Draw Candidates", true};
-        ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
-        ofParameter<int> minAge{ "Min age", 10, 0, 60 };
+        ofParameter<int> maxBlobNum{ "Max blob num", 8, 1, 10 };
+        ofParameter<int> minAge{ "Min age", 12, 0, 60 };
         // Stricter admission age when already tracking two or more blobs.
         // Helps avoid transient false positives stealing extra voices.
-        ofParameter<int> extraVoiceMinAge{ "Extra voice min age", 10, 0, 120 };
+        ofParameter<int> extraVoiceMinAge{ "Extra voice min age", 18, 0, 120 };
         // 0 = Blob (current implementation), 1 = YOLO (scaffold placeholder).
         ofParameter<int> trackingTechnique{ "Tracking Technique (0 Blob, 1 YOLO)", 0, 0, 1 };
         ofParameterGroup grp{ "Tracker", trackingTechnique, minArea, maxArea, bFindHoles, bSimplify, trackHoldStrictness, trackMatchStrictness, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, extraVoiceMinAge, /*blobScale */};

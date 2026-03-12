@@ -169,7 +169,6 @@ public:
             const float drawX = (ofGetWidth() - v.width) * 0.5f;
             const float drawY = (ofGetHeight() - v.height) * 0.5f;
 			ofPushStyle();
-			ofEnableAlphaBlending();
             ofSetColor(255);
 			inImg.draw(drawX, drawY, v.width, v.height);
             if(bHeatmap) heatmap.drawFbo(drawX, drawY, v.width, v.height);
@@ -222,7 +221,6 @@ public:
 
                 // 2+
                 ofPushStyle();
-                ofEnableAlphaBlending();
                 tracker.drawFbo(0, ty, w, h);
                 ofPopStyle();
             }

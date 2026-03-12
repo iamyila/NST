@@ -1,5 +1,233 @@
 #include "ofApp.h"
 #include <cmath>
+#include <sstream>
+
+namespace {
+int midiDataBytesForStatus(unsigned char status) {
+    if (status >= 0xF0) return 0;
+    const unsigned char type = static_cast<unsigned char>(status & 0xF0);
+    if (type == 0xC0 || type == 0xD0) return 1;
+    return 2;
+}
+
+float wrapDegrees(float deg) {
+    while (deg < 0.0f) deg += 360.0f;
+    while (deg >= 360.0f) deg -= 360.0f;
+    return deg;
+}
+}
+
+ofApp::~ofApp() {
+    teardownMidiInput();
+}
+
+void ofApp::setupMidiInput() {
+#ifdef __APPLE__
+    teardownMidiInput();
+
+    const OSStatus clientErr = MIDIClientCreate(CFSTR("NSTSenderMIDI"), nullptr, nullptr, &midiClientRef);
+    if (clientErr != noErr || midiClientRef == 0) {
+        midiTakeoverStatus = "MIDI unavailable (client create failed)";
+        return;
+    }
+
+    const OSStatus portErr = MIDIInputPortCreate(midiClientRef, CFSTR("NSTSenderMIDIIn"), &ofApp::midiReadProc, this, &midiInputPortRef);
+    if (portErr != noErr || midiInputPortRef == 0) {
+        midiTakeoverStatus = "MIDI unavailable (input port failed)";
+        teardownMidiInput();
+        return;
+    }
+
+    midiConnectedSourceCount = 0;
+    const ItemCount sourceCount = MIDIGetNumberOfSources();
+    for (ItemCount i = 0; i < sourceCount; ++i) {
+        MIDIEndpointRef source = MIDIGetSource(i);
+        if (source == 0) continue;
+        if (MIDIPortConnectSource(midiInputPortRef, source, nullptr) == noErr) {
+            ++midiConnectedSourceCount;
+        }
+    }
+
+    if (midiConnectedSourceCount <= 0) {
+        midiTakeoverStatus = "MIDI in ready (no sources connected)";
+    } else {
+        midiTakeoverStatus = "MIDI in connected: " + ofToString(midiConnectedSourceCount) + " source(s)";
+    }
+#else
+    midiTakeoverStatus = "MIDI input unsupported on this platform";
+#endif
+}
+
+void ofApp::teardownMidiInput() {
+#ifdef __APPLE__
+    if (midiInputPortRef != 0) {
+        MIDIPortDispose(midiInputPortRef);
+        midiInputPortRef = 0;
+    }
+    if (midiClientRef != 0) {
+        MIDIClientDispose(midiClientRef);
+        midiClientRef = 0;
+    }
+#endif
+    midiConnectedSourceCount = 0;
+}
+
+void ofApp::midiReadProc(const MIDIPacketList* packetList, void* readProcRefCon, void* srcConnRefCon) {
+    (void)srcConnRefCon;
+    if (!packetList || !readProcRefCon) return;
+    auto* app = static_cast<ofApp*>(readProcRefCon);
+    app->handleMidiPacketList(packetList);
+}
+
+void ofApp::handleMidiPacketList(const MIDIPacketList* packetList) {
+    if (!packetList) return;
+    std::lock_guard<std::mutex> lock(midiQueueMutex);
+
+    const MIDIPacket* packet = &packetList->packet[0];
+    for (unsigned int i = 0; i < packetList->numPackets; ++i) {
+        unsigned char runningStatus = 0;
+        int expectedData = 0;
+        bool haveData1 = false;
+        unsigned char data1 = 0;
+
+        for (unsigned int j = 0; j < packet->length; ++j) {
+            const unsigned char byte = packet->data[j];
+
+            if (byte & 0x80) {
+                if (byte >= 0xF8) continue; // realtime
+                if (byte == 0xF0 || byte == 0xF7) {
+                    runningStatus = 0;
+                    expectedData = 0;
+                    haveData1 = false;
+                    continue;
+                }
+                runningStatus = byte;
+                expectedData = midiDataBytesForStatus(runningStatus);
+                haveData1 = false;
+                continue;
+            }
+
+            if (runningStatus == 0 || expectedData != 2) continue;
+
+            if (!haveData1) {
+                data1 = byte;
+                haveData1 = true;
+                continue;
+            }
+
+            const unsigned char data2 = byte;
+            haveData1 = false;
+
+            const unsigned char type = static_cast<unsigned char>(runningStatus & 0xF0);
+            if (type != 0xB0) continue; // CC only
+
+            const int channel = static_cast<int>(runningStatus & 0x0F) + 1;
+            const int cc = static_cast<int>(data1);
+            const int value = static_cast<int>(data2);
+            midiCcQueue.emplace_back(channel, cc, value);
+        }
+
+        packet = MIDIPacketNext(packet);
+    }
+}
+
+int ofApp::midiAxisForCc(int cc) const {
+    for (int i = 0; i < static_cast<int>(midiTakeoverCcMap.size()); ++i) {
+        if (midiTakeoverCcMap[i] == cc) return i;
+    }
+    return -1;
+}
+
+std::string ofApp::midiSourceName(MIDIEndpointRef source) const {
+#ifdef __APPLE__
+    if (source == 0) return "Unknown";
+    CFStringRef cfName = nullptr;
+    if (MIDIObjectGetStringProperty(source, kMIDIPropertyDisplayName, &cfName) != noErr || cfName == nullptr) {
+        return "Unknown";
+    }
+    char buffer[256];
+    const bool ok = CFStringGetCString(cfName, buffer, sizeof(buffer), kCFStringEncodingUTF8);
+    CFRelease(cfName);
+    return ok ? std::string(buffer) : std::string("Unknown");
+#else
+    (void)source;
+    return "Unknown";
+#endif
+}
+
+void ofApp::processMidiInputQueue() {
+    std::vector<std::tuple<int, int, int>> queue;
+    {
+        std::lock_guard<std::mutex> lock(midiQueueMutex);
+        if (midiCcQueue.empty()) return;
+        queue.swap(midiCcQueue);
+    }
+
+    int applied = 0;
+    for (const auto& msg : queue) {
+        const int channel = std::get<0>(msg);
+        const int cc = std::get<1>(msg);
+        const int value = std::get<2>(msg);
+        if (channel != midiTakeoverChannel) continue;
+        const int axis = midiAxisForCc(cc);
+        if (axis < 0) continue;
+        midiTakeoverNorm[axis] = ofClamp(static_cast<float>(value) / 127.0f, 0.0f, 1.0f);
+        midiTakeoverSeen[axis] = true;
+        ++applied;
+    }
+
+    if (applied > 0) {
+        midiTakeoverStatus =
+            "listening ch" + ofToString(midiTakeoverChannel) +
+            " (mapped CC updates: " + ofToString(applied) + ", src " + ofToString(midiConnectedSourceCount) + ")";
+    }
+}
+
+void ofApp::applyMidiTakeover(float dt) {
+    if (!midiTakeoverEnabled) return;
+    if (rainMode && !midiTakeoverAllowRain) return;
+    if (dt <= 0.0f) return;
+
+    const int controlled = std::min(4, static_cast<int>(shapes.size()));
+    for (int i = 0; i < controlled; ++i) {
+        const int xAxis = i * 2;
+        const int yAxis = i * 2 + 1;
+        if (!midiTakeoverSeen[xAxis] || !midiTakeoverSeen[yAxis]) continue;
+
+        auto& s = shapes[i];
+        MotionBounds b = getMotionBounds(s.radius);
+
+        const float xNorm = midiTakeoverNorm[xAxis];
+        const float yNorm = midiTakeoverNorm[yAxis];
+        float targetX = ofLerp(b.minX, b.maxX, xNorm);
+        float targetY = ofLerp(b.maxY, b.minY, yNorm); // top = 100%
+
+        if (midiTakeoverPickUp) {
+            const float currentXNorm = ofMap(s.pos.x, b.minX, b.maxX, 0.0f, 1.0f, true);
+            const float currentYNorm = ofMap(s.pos.y, b.maxY, b.minY, 0.0f, 1.0f, true);
+            constexpr float pickupWindow = 0.05f;
+
+            if (!midiTakeoverLatched[xAxis] && std::abs(xNorm - currentXNorm) <= pickupWindow) {
+                midiTakeoverLatched[xAxis] = true;
+            }
+            if (!midiTakeoverLatched[yAxis] && std::abs(yNorm - currentYNorm) <= pickupWindow) {
+                midiTakeoverLatched[yAxis] = true;
+            }
+            if (!midiTakeoverLatched[xAxis]) targetX = s.pos.x;
+            if (!midiTakeoverLatched[yAxis]) targetY = s.pos.y;
+        } else {
+            midiTakeoverLatched[xAxis] = true;
+            midiTakeoverLatched[yAxis] = true;
+        }
+
+        const glm::vec2 target(targetX, targetY);
+        const float alpha = midiTakeoverPickUp ? 0.38f : 0.24f;
+        s.pos = glm::mix(s.pos, target, alpha);
+        s.vel *= 0.55f;
+        applyCenterDeadZone(s, dt);
+        keepInsideFrame(s);
+    }
+}
 
 ofApp::MotionBounds ofApp::getMotionBounds(float radius) const {
     MotionBounds b;
@@ -20,8 +248,29 @@ ofApp::MotionBounds ofApp::getMotionBounds(float radius) const {
     return b;
 }
 
+glm::vec2 ofApp::rainDirectionUnit() const {
+    const float rad = glm::radians(rainAngleDeg);
+    glm::vec2 d(std::cos(rad), std::sin(rad));
+    if (glm::length2(d) < 0.000001f) return glm::vec2(0.0f, 1.0f);
+    return glm::normalize(d);
+}
+
+glm::vec2 ofApp::rainTangentUnit() const {
+    const glm::vec2 d = rainDirectionUnit();
+    return glm::vec2(-d.y, d.x);
+}
+
+void ofApp::getRainProjectionExtents(float& alongDirHalfExtent, float& alongTangentHalfExtent) const {
+    const glm::vec2 d = rainDirectionUnit();
+    const glm::vec2 t = rainTangentUnit();
+    const float halfW = static_cast<float>(frameW) * 0.5f;
+    const float halfH = static_cast<float>(frameH) * 0.5f;
+    alongDirHalfExtent = std::abs(d.x) * halfW + std::abs(d.y) * halfH;
+    alongTangentHalfExtent = std::abs(t.x) * halfW + std::abs(t.y) * halfH;
+}
+
 void ofApp::setup() {
-    ofSetFrameRate(60);
+    ofSetFrameRate(40);
     ofBackground(16);
 
     fbo.allocate(frameW, frameH, GL_RGBA);
@@ -40,6 +289,7 @@ void ofApp::setup() {
     initShapes();
     applyPeriodicBlinkControls();
     loadPresetFile();
+    setupMidiInput();
 }
 
 void ofApp::applyPeriodicBlinkControls() {
@@ -95,6 +345,12 @@ void ofApp::initShapes() {
         s.color = ofColor::fromHsb(static_cast<unsigned char>(hue), 220, 255);
         shapes.push_back(s);
     }
+
+    if (rainMode) {
+        for (auto& s : shapes) {
+            resetShapeForRain(s, true);
+        }
+    }
 }
 
 void ofApp::updateBlinkStates(float dt) {
@@ -117,12 +373,29 @@ bool ofApp::isShapeOn(const MovingShape& shape) const {
     return t < (shape.blinkPeriodSec * shape.blinkDuty);
 }
 
+float ofApp::edgeMetric01(const MovingShape& s) const {
+    MotionBounds b = getMotionBounds(s.radius);
+    const float w = std::max(1.0f, b.maxX - b.minX);
+    const float h = std::max(1.0f, b.maxY - b.minY);
+    const float nx = ofClamp((s.pos.x - b.minX) / w, 0.0f, 1.0f);
+    const float ny = ofClamp((s.pos.y - b.minY) / h, 0.0f, 1.0f);
+    return std::max(std::abs(nx * 2.0f - 1.0f), std::abs(ny * 2.0f - 1.0f));
+}
+
 ofRectangle ofApp::getSliderRect(int sliderIndex) const {
     const float w = 220.0f;
     const float h = 12.0f;
     const float x = 20.0f;
     const float y0 = static_cast<float>(ofGetHeight()) - 70.0f;
     return ofRectangle(x, y0 + sliderIndex * 24.0f, w, h);
+}
+
+ofRectangle ofApp::getFloodArmRect() const {
+    const float w = 150.0f;
+    const float h = 28.0f;
+    const float x = (static_cast<float>(ofGetWidth()) - w) * 0.5f;
+    const float y = static_cast<float>(ofGetHeight()) - 48.0f;
+    return ofRectangle(x, y, w, h);
 }
 
 ofRectangle ofApp::getPresetCellRect(int row, int col) const {
@@ -321,9 +594,25 @@ void ofApp::keepInsideFrameAirHockey(MovingShape& shape) {
 
 void ofApp::updateShapes(float dt) {
     if (dt <= 0.0f) return;
+    if (floodActive) {
+        floodRemainingSec -= dt;
+        if (floodRemainingSec <= 0.0f) {
+            floodActive = false;
+            floodCooldownRemainingSec = floodCooldownSec;
+        }
+    } else if (floodCooldownRemainingSec > 0.0f) {
+        floodCooldownRemainingSec -= dt;
+    }
+
     const glm::vec2 frameCenter(static_cast<float>(frameW) * 0.5f, static_cast<float>(frameH) * 0.5f);
+    const glm::vec2 rainDir = rainDirectionUnit();
+    const glm::vec2 rainTan = rainTangentUnit();
+    float rainDirHalfExtent = 0.0f;
+    float rainTanHalfExtent = 0.0f;
+    getRainProjectionExtents(rainDirHalfExtent, rainTanHalfExtent);
     glm::vec2 magnetTarget = frameCenter;
     glm::vec2 activeCentroid = frameCenter;
+    float rainEdgePeak = 0.0f;
     int activeCount = 0;
     const int maxI = std::min(activeBlobLimit, static_cast<int>(shapes.size()));
     for (int i = 0; i < maxI; ++i) {
@@ -349,6 +638,39 @@ void ofApp::updateShapes(float dt) {
 
     for (size_t idx = 0; idx < shapes.size(); ++idx) {
         auto& s = shapes[idx];
+        if (rainMode) {
+            if (!s.naturalOn) {
+                s.naturalOn = true;
+            }
+
+            // Rain movement: flow direction set by rainAngleDeg + light lateral drift.
+            const float floodMul = (floodEnabled && floodActive) ? 1.9f : 1.0f;
+            s.walkDir.x = ofClamp(s.walkDir.x + ofRandomf() * 18.0f * dt, -320.0f, 320.0f);
+            const float targetForward = s.walkDir.y * floodMul;
+            const float targetLateral = s.walkDir.x * floodMul;
+            const glm::vec2 targetVel = rainDir * targetForward + rainTan * targetLateral;
+            s.vel = glm::mix(s.vel, targetVel, 0.06f);
+            const float forwardNow = glm::dot(s.vel, rainDir);
+            if (forwardNow < 120.0f) {
+                s.vel += rainDir * (120.0f - forwardNow);
+            }
+            s.pos += s.vel * dt;
+            // Dead zone should remain global across all motion modes, including rain.
+            applyCenterDeadZone(s, dt);
+
+            if (idx < 8) {
+                rainEdgePeak = std::max(rainEdgePeak, edgeMetric01(s));
+            }
+
+            const float exitMargin = std::max(90.0f, s.radius * 2.6f);
+            // Keep rain visually clean: spawn from above and only recycle once it has
+            // clearly fallen past the bottom edge, not when it briefly clips a side.
+            if (s.pos.y - s.radius > static_cast<float>(frameH) + exitMargin) {
+                resetShapeForRain(s, false);
+            }
+            continue;
+        }
+
         if (airHockeyMode) {
             if (!s.naturalOn) {
                 s.stateRemainingSec -= dt;
@@ -454,6 +776,19 @@ void ofApp::updateShapes(float dt) {
         keepInsideFrame(s);
     }
 
+    if (rainMode && floodEnabled) {
+        // Rising-edge trigger with hysteresis to avoid armed/active chatter.
+        if (!floodEdgeLatch && rainEdgePeak >= 0.985f && !floodActive && floodCooldownRemainingSec <= 0.0f) {
+            floodActive = true;
+            floodRemainingSec = floodDurationSec;
+            floodEdgeLatch = true;
+        } else if (floodEdgeLatch && rainEdgePeak <= 0.94f) {
+            floodEdgeLatch = false;
+        }
+    } else {
+        floodEdgeLatch = false;
+    }
+
     applyBlobRepulsion(dt);
 }
 
@@ -463,6 +798,31 @@ void ofApp::resetShapeForAirHockey(MovingShape& s) {
     glm::vec2 dir = glm::normalize(glm::vec2(ofRandomf(), ofRandomf()));
     if (glm::length(dir) < 0.0001f) dir = glm::vec2(1.0f, 0.0f);
     s.vel = dir * ofRandom(240.0f, 420.0f);
+    s.naturalOn = true;
+    s.stateRemainingSec = randomHoldDuration(true);
+}
+
+void ofApp::resetShapeForRain(MovingShape& s, bool firstInit) {
+    const glm::vec2 dir = rainDirectionUnit();
+    const glm::vec2 tan = rainTangentUnit();
+    const float margin = std::max(60.0f, s.radius * 2.2f);
+
+    const float lateral = ofRandom(-120.0f, 120.0f);
+    const float forward = ofRandom(210.0f, 360.0f);
+    s.walkDir = glm::vec2(lateral, forward);
+    s.vel = dir * forward + tan * lateral;
+
+    const float topY = -margin - ofRandom(0.0f, margin * 0.9f);
+    const float entryX = ofRandom(s.radius, static_cast<float>(frameW) - s.radius);
+    const float vy = (s.vel.y > 40.0f) ? s.vel.y : 40.0f;
+    const float timeToTop = (-topY) / vy;
+    float spawnX = entryX - s.vel.x * timeToTop;
+
+    if (firstInit) {
+        spawnX += ofRandom(-18.0f, 18.0f);
+    }
+
+    s.pos = glm::vec2(spawnX, topY);
     s.naturalOn = true;
     s.stateRemainingSec = randomHoldDuration(true);
 }
@@ -551,7 +911,7 @@ void ofApp::renderFrame() {
     ofFill();
 
     int considered = 0;
-    const int limit = bUseBrownianDrunkMotion ? static_cast<int>(shapes.size()) : std::min(5, static_cast<int>(shapes.size()));
+    const int limit = (rainMode || bUseBrownianDrunkMotion) ? static_cast<int>(shapes.size()) : std::min(5, static_cast<int>(shapes.size()));
     for (int i = 0; i < limit; ++i) {
         if (considered >= activeBlobLimit) break;
         considered++;
@@ -578,7 +938,9 @@ void ofApp::renderFrame() {
 
 void ofApp::update() {
     float dt = paused ? 0.0f : ofGetLastFrameTime() * speed;
-    int maxBlobs = bUseBrownianDrunkMotion ? static_cast<int>(shapes.size()) : 5;
+    processMidiInputQueue();
+
+    int maxBlobs = (rainMode || bUseBrownianDrunkMotion) ? static_cast<int>(shapes.size()) : 5;
     if (autoBlobCount) {
         static const int seq[] = {0, 1, 2, 4, 6, 3, 0, 5, 2};
         const int phase = static_cast<int>(simTime / 1.1f) % static_cast<int>(sizeof(seq) / sizeof(seq[0]));
@@ -586,12 +948,19 @@ void ofApp::update() {
     } else {
         activeBlobLimit = ofClamp(manualBlobCount, 0, maxBlobs);
     }
+    if (rainMode) {
+        // Rain mode is intentionally fixed at 8 blobs for consistency in performance.
+        autoBlobCount = false;
+        manualBlobCount = std::min(maxBlobs, 8);
+        activeBlobLimit = manualBlobCount;
+    }
 
     if (!airHockeyMode) {
         updateBlinkStates(dt);
     }
     // Shape simulation now drives both motion modes.
     updateShapes(dt);
+    applyMidiTakeover(dt);
 
     simTime += dt;
     renderFrame();
@@ -610,9 +979,11 @@ void ofApp::draw() {
     ofDrawBitmapStringHighlight("Stream: " + streamName, 20, 44);
     ofDrawBitmapStringHighlight(
         std::string("Motion: ") +
-        (bUseBrownianDrunkMotion
+        (rainMode
+            ? ("Rain Drift (8 blobs, " + ofToString(rainAngleDeg, 1) + "deg)")
+            : (bUseBrownianDrunkMotion
             ? (airHockeyMode ? "Air Hockey (inertia + respawn)" : "Brownian + Drunkard (10 shapes)")
-            : "Normal"),
+            : "Normal")),
         20, 64
     );
     ofDrawBitmapStringHighlight("Shapes pulse on/off automatically", 20, 84);
@@ -626,21 +997,26 @@ void ofApp::draw() {
         " | Physics: " + std::string(collisionPhysics ? "On" : "Off") +
         " | Coll: " + ofToString(collisionStrength, 0) +
         " | Blink: " + std::string(airHockeyMode ? "Inertia Respawn" : (naturalBlink ? "Natural" : "Periodic")) +
-        " | N:" + std::string(naturalBlink ? "Natural" : "Periodic"),
+        " | N:" + std::string(naturalBlink ? "Natural" : "Periodic") +
+        " | RainAng: " + ofToString(rainAngleDeg, 1) + "deg" +
+        " | Flood: " + std::string(rainMode ? (floodEnabled ? "on" : "off") : "off") +
+        " | MIDI: " + std::string(midiTakeoverEnabled ? (midiTakeoverPickUp ? "pick-up" : "scaled") : "off"),
         20, 144
     );
     if (!manualBlobInput.empty()) {
         ofDrawBitmapStringHighlight("Manual blob input: " + manualBlobInput + " (press Enter)", 20, 164);
     }
-    ofDrawBitmapStringHighlight("Mode: [m] normal/brownian, [h] air-hockey, [n] natural/periodic blink", 20, 184);
+    ofDrawBitmapStringHighlight("Mode: [m] normal/brownian, [h] air-hockey, [g] rain drift, [f] flood arm, [n] natural/periodic blink", 20, 184);
     ofDrawBitmapStringHighlight("Count: [b] auto, [0-10]+Enter manual, [[]/[]] +/-1 blob", 20, 202);
-    ofDrawBitmapStringHighlight("Motion: [k] magnet, [,/.] magnet strength, [p] physics, [c/v] collision strength", 20, 220);
+    ofDrawBitmapStringHighlight("Motion: [k] magnet, [</>] rain angle in rain mode, [,/.] magnet strength otherwise, [p] physics, [c/v] collision strength", 20, 220);
     ofDrawBitmapStringHighlight("Bounds: [e] edge bounce, [d] dead-zone on/off, [z/x] dead-zone size, [q] square bounds", 20, 238);
     ofDrawBitmapStringHighlight("Transport: [space] pause, [+/-] speed, [r] reset, mouse-drag push", 20, 256);
-    ofDrawBitmapStringHighlight("Presets: click LOAD/SAVE buttons (slots 1-4)", 20, 274);
+    ofDrawBitmapStringHighlight("MIDI: [t] takeover on/off, [y] pick-up/scaled (rain bypass), Ch16 CC20-27", 20, 274);
+    ofDrawBitmapStringHighlight("Presets: click LOAD/SAVE buttons (slots 1-4)", 20, 292);
     if (!presetStatus.empty() && ofGetElapsedTimef() <= presetStatusUntil) {
-        ofDrawBitmapStringHighlight(presetStatus, 20, 292);
+        ofDrawBitmapStringHighlight(presetStatus, 20, 310);
     }
+    ofDrawBitmapStringHighlight("MIDI input: " + midiTakeoverStatus, 20, 328);
 
     for (int col = 0; col < 4; ++col) {
         const bool valid = presetSlots[col].valid;
@@ -681,6 +1057,24 @@ void ofApp::draw() {
     ofDrawBitmapStringHighlight(ofToString(onDutyControl * 100.0f, 0) + "%", dutyRect.getX() + dutyRect.getWidth() + 80.0f, dutyRect.getY() + 11.0f);
     ofDrawBitmapStringHighlight("On/Off Rate", rateRect.getX() + rateRect.getWidth() + 10.0f, rateRect.getY() + 11.0f);
     ofDrawBitmapStringHighlight(ofToString(blinkRateControl * 100.0f, 0) + "%", rateRect.getX() + rateRect.getWidth() + 80.0f, rateRect.getY() + 11.0f);
+
+    const ofRectangle floodRect = getFloodArmRect();
+    if (!rainMode) {
+        ofSetColor(50, 50, 50, 180);
+    } else if (floodEnabled) {
+        ofSetColor(floodActive ? ofColor(255, 90, 70, 220) : ofColor(235, 170, 60, 210));
+    } else {
+        ofSetColor(60, 60, 60, 190);
+    }
+    ofDrawRectangle(floodRect);
+    ofSetColor(255);
+    ofNoFill();
+    ofDrawRectangle(floodRect);
+    ofFill();
+    ofDrawBitmapStringHighlight(
+        (rainMode && floodEnabled) ? (floodActive ? "FLOOD MODE (ACTIVE)" : "FLOOD MODE (ON)") : "FLOOD MODE (OFF)",
+        floodRect.getX() + 8.0f, floodRect.getY() + 18.0f
+    );
 
     ofDrawBitmapStringHighlight(
         "Sending moving NDI stream: " + streamName +
@@ -723,9 +1117,53 @@ void ofApp::keyPressed(int key) {
             }
         }
     }
+    else if (key == 't' || key == 'T') {
+        midiTakeoverEnabled = !midiTakeoverEnabled;
+        midiTakeoverLatched.fill(false);
+    }
+    else if (key == 'y' || key == 'Y') {
+        midiTakeoverPickUp = !midiTakeoverPickUp;
+        midiTakeoverLatched.fill(false);
+    }
     else if (key == 'k' || key == 'K') magnetMode = !magnetMode;
+    else if (key == 'f' || key == 'F') {
+        floodEnabled = !floodEnabled;
+        if (!floodEnabled) {
+            floodActive = false;
+            floodRemainingSec = 0.0f;
+            floodEdgeLatch = false;
+        }
+    }
+    else if (key == 'g' || key == 'G') {
+        rainMode = !rainMode;
+        if (rainMode) {
+            midiTakeoverEnabled = false;
+            midiTakeoverLatched.fill(false);
+            airHockeyMode = false;
+            bUseBrownianDrunkMotion = true;
+            autoBlobCount = false;
+            manualBlobCount = 8;
+            magnetMode = false;
+            collisionPhysics = false;
+            naturalBlink = false;
+            onDutyControl = 0.90f;
+            blinkRateControl = 0.20f;
+            floodEnabled = false;
+            floodActive = false;
+            floodRemainingSec = 0.0f;
+            floodCooldownRemainingSec = 0.0f;
+            floodEdgeLatch = false;
+            for (auto& s : shapes) {
+                resetShapeForRain(s, true);
+            }
+        } else {
+            initShapes();
+            applyPeriodicBlinkControls();
+        }
+    }
     else if (key == 'h' || key == 'H') {
         airHockeyMode = !airHockeyMode;
+        if (airHockeyMode) rainMode = false;
         for (auto& s : shapes) {
             if (airHockeyMode) {
                 resetShapeForAirHockey(s);
@@ -736,6 +1174,7 @@ void ofApp::keyPressed(int key) {
         }
     }
     else if (key == 'm' || key == 'M') {
+        rainMode = false;
         bUseBrownianDrunkMotion = !bUseBrownianDrunkMotion;
         if (bUseBrownianDrunkMotion) initShapes();
     } else if (key == ']') { manualBlobCount = std::min(10, manualBlobCount + 1); autoBlobCount = false; }
@@ -746,8 +1185,22 @@ void ofApp::keyPressed(int key) {
     else if (key == 'x' || key == 'X') { centerDeadZoneNorm = std::min(0.45f, centerDeadZoneNorm + 0.02f); deadZoneEnabled = true; }
     else if (key == 'z' || key == 'Z') { centerDeadZoneNorm = std::max(0.0f, centerDeadZoneNorm - 0.02f); if (centerDeadZoneNorm <= 0.0001f) deadZoneEnabled = false; }
     else if (key == 'p' || key == 'P') collisionPhysics = !collisionPhysics;
-    else if (key == ',') magnetStrength = std::max(50.0f, magnetStrength - 50.0f);
-    else if (key == '.') magnetStrength = std::min(3000.0f, magnetStrength + 50.0f);
+    else if (key == ',' || key == '<') {
+        if (rainMode) {
+            rainAngleDeg = wrapDegrees(rainAngleDeg - 5.0f);
+            for (auto& s : shapes) resetShapeForRain(s, true);
+        } else {
+            magnetStrength = std::max(50.0f, magnetStrength - 50.0f);
+        }
+    }
+    else if (key == '.' || key == '>') {
+        if (rainMode) {
+            rainAngleDeg = wrapDegrees(rainAngleDeg + 5.0f);
+            for (auto& s : shapes) resetShapeForRain(s, true);
+        } else {
+            magnetStrength = std::min(3000.0f, magnetStrength + 50.0f);
+        }
+    }
     else if (key == 'c' || key == 'C') collisionStrength = std::max(100.0f, collisionStrength - 100.0f);
     else if (key == 'v' || key == 'V') collisionStrength = std::min(6000.0f, collisionStrength + 100.0f);
     else if (key == 'r' || key == 'R') { initShapes(); simTime = 0.0f; }
@@ -759,6 +1212,7 @@ ofApp::SenderPreset ofApp::captureCurrentPreset() const {
     p.speed = speed;
     p.bUseBrownianDrunkMotion = bUseBrownianDrunkMotion;
     p.airHockeyMode = airHockeyMode;
+    p.rainMode = rainMode;
     p.autoBlobCount = autoBlobCount;
     p.manualBlobCount = manualBlobCount;
     p.edgeBounce = edgeBounce;
@@ -772,6 +1226,12 @@ ofApp::SenderPreset ofApp::captureCurrentPreset() const {
     p.blinkRateControl = blinkRateControl;
     p.magnetMode = magnetMode;
     p.magnetStrength = magnetStrength;
+    p.floodEnabled = floodEnabled;
+    p.floodDurationSec = floodDurationSec;
+    p.floodCooldownSec = floodCooldownSec;
+    p.rainAngleDeg = rainAngleDeg;
+    p.midiTakeoverEnabled = midiTakeoverEnabled;
+    p.midiTakeoverPickUp = midiTakeoverPickUp;
     return p;
 }
 
@@ -779,6 +1239,7 @@ void ofApp::applyPreset(const SenderPreset& p) {
     speed = p.speed;
     bUseBrownianDrunkMotion = p.bUseBrownianDrunkMotion;
     airHockeyMode = p.airHockeyMode;
+    rainMode = p.rainMode;
     autoBlobCount = p.autoBlobCount;
     manualBlobCount = ofClamp(p.manualBlobCount, 0, 10);
     edgeBounce = p.edgeBounce;
@@ -792,6 +1253,27 @@ void ofApp::applyPreset(const SenderPreset& p) {
     blinkRateControl = ofClamp(p.blinkRateControl, 0.0f, 1.0f);
     magnetMode = p.magnetMode;
     magnetStrength = ofClamp(p.magnetStrength, 50.0f, 3000.0f);
+    floodEnabled = p.floodEnabled;
+    floodDurationSec = ofClamp(p.floodDurationSec, 0.5f, 8.0f);
+    floodCooldownSec = ofClamp(p.floodCooldownSec, 0.2f, 6.0f);
+    rainAngleDeg = wrapDegrees(p.rainAngleDeg);
+    midiTakeoverEnabled = p.midiTakeoverEnabled;
+    midiTakeoverPickUp = p.midiTakeoverPickUp;
+    midiTakeoverLatched.fill(false);
+    floodActive = false;
+    floodRemainingSec = 0.0f;
+    floodCooldownRemainingSec = 0.0f;
+    floodEdgeLatch = false;
+
+    if (rainMode) {
+        midiTakeoverEnabled = false;
+        midiTakeoverLatched.fill(false);
+        autoBlobCount = false;
+        manualBlobCount = std::min(static_cast<int>(shapes.size()), 8);
+        for (auto& s : shapes) {
+            resetShapeForRain(s, true);
+        }
+    }
 
     applyPeriodicBlinkControls();
     for (auto& s : shapes) {
@@ -809,6 +1291,7 @@ void ofApp::savePresetFile() const {
         s["speed"] = p.speed;
         s["bUseBrownianDrunkMotion"] = p.bUseBrownianDrunkMotion;
         s["airHockeyMode"] = p.airHockeyMode;
+        s["rainMode"] = p.rainMode;
         s["autoBlobCount"] = p.autoBlobCount;
         s["manualBlobCount"] = p.manualBlobCount;
         s["edgeBounce"] = p.edgeBounce;
@@ -822,6 +1305,12 @@ void ofApp::savePresetFile() const {
         s["blinkRateControl"] = p.blinkRateControl;
         s["magnetMode"] = p.magnetMode;
         s["magnetStrength"] = p.magnetStrength;
+        s["floodEnabled"] = p.floodEnabled;
+        s["floodDurationSec"] = p.floodDurationSec;
+        s["floodCooldownSec"] = p.floodCooldownSec;
+        s["rainAngleDeg"] = p.rainAngleDeg;
+        s["midiTakeoverEnabled"] = p.midiTakeoverEnabled;
+        s["midiTakeoverPickUp"] = p.midiTakeoverPickUp;
         j["slots"].push_back(s);
     }
     ofSavePrettyJson(ofToDataPath("sender_slots.json", true), j);
@@ -842,6 +1331,7 @@ void ofApp::loadPresetFile() {
         p.speed = s.value("speed", p.speed);
         p.bUseBrownianDrunkMotion = s.value("bUseBrownianDrunkMotion", p.bUseBrownianDrunkMotion);
         p.airHockeyMode = s.value("airHockeyMode", p.airHockeyMode);
+        p.rainMode = s.value("rainMode", p.rainMode);
         p.autoBlobCount = s.value("autoBlobCount", p.autoBlobCount);
         p.manualBlobCount = s.value("manualBlobCount", p.manualBlobCount);
         p.edgeBounce = s.value("edgeBounce", p.edgeBounce);
@@ -855,6 +1345,12 @@ void ofApp::loadPresetFile() {
         p.blinkRateControl = s.value("blinkRateControl", p.blinkRateControl);
         p.magnetMode = s.value("magnetMode", p.magnetMode);
         p.magnetStrength = s.value("magnetStrength", p.magnetStrength);
+        p.floodEnabled = s.value("floodEnabled", p.floodEnabled);
+        p.floodDurationSec = s.value("floodDurationSec", p.floodDurationSec);
+        p.floodCooldownSec = s.value("floodCooldownSec", p.floodCooldownSec);
+        p.rainAngleDeg = s.value("rainAngleDeg", p.rainAngleDeg);
+        p.midiTakeoverEnabled = s.value("midiTakeoverEnabled", p.midiTakeoverEnabled);
+        p.midiTakeoverPickUp = s.value("midiTakeoverPickUp", p.midiTakeoverPickUp);
         presetSlots[i] = p;
     }
 }
@@ -884,6 +1380,16 @@ void ofApp::loadPresetSlot(int slotIndex) {
 void ofApp::mousePressed(int x, int y, int button) {
     (void)button;
     if (handlePresetGridAt(x, y)) return;
+    if (getFloodArmRect().inside(static_cast<float>(x), static_cast<float>(y))) {
+        if (!rainMode) return;
+        floodEnabled = !floodEnabled;
+        if (!floodEnabled) {
+            floodActive = false;
+            floodRemainingSec = 0.0f;
+            floodEdgeLatch = false;
+        }
+        return;
+    }
     if (handleSliderAt(x, y)) return;
     const float sx = static_cast<float>(frameW) / std::max(1.0f, static_cast<float>(ofGetWidth()));
     const float sy = static_cast<float>(frameH) / std::max(1.0f, static_cast<float>(ofGetHeight()));

@@ -4,10 +4,18 @@
 #include "ofxNDISender.h"
 #include "ofxNDISendStream.h"
 #include <array>
+#include <mutex>
 #include <string>
+#include <tuple>
+#include <vector>
+
+#ifdef __APPLE__
+#include <CoreMIDI/CoreMIDI.h>
+#endif
 
 class ofApp : public ofBaseApp {
 public:
+    ~ofApp() override;
     void setup() override;
     void update() override;
     void draw() override;
@@ -49,6 +57,7 @@ private:
         float speed = 1.0f;
         bool bUseBrownianDrunkMotion = true;
         bool airHockeyMode = false;
+        bool rainMode = false;
         bool autoBlobCount = true;
         int manualBlobCount = 3;
         bool edgeBounce = true;
@@ -62,6 +71,12 @@ private:
         float blinkRateControl = 0.30f;
         bool magnetMode = false;
         float magnetStrength = 720.0f;
+        bool floodEnabled = false;
+        float floodDurationSec = 2.6f;
+        float floodCooldownSec = 1.4f;
+        float rainAngleDeg = 90.0f;
+        bool midiTakeoverEnabled = false;
+        bool midiTakeoverPickUp = true;
     };
 
     void initShapes();
@@ -75,8 +90,10 @@ private:
     void applyBlobRepulsion(float dt);
     void applyPushField(const glm::vec2& pt, float strength);
     void resetShapeForAirHockey(MovingShape& s);
+    void resetShapeForRain(MovingShape& s, bool firstInit);
     float randomHoldDuration(bool onState) const;
     ofRectangle getSliderRect(int sliderIndex) const;
+    ofRectangle getFloodArmRect() const;
     bool handleSliderAt(int x, int y);
     bool handlePresetGridAt(int x, int y);
     ofRectangle getPresetCellRect(int row, int col) const;
@@ -89,6 +106,18 @@ private:
     SenderPreset captureCurrentPreset() const;
     void savePresetFile() const;
     void loadPresetFile();
+    float edgeMetric01(const MovingShape& s) const;
+    void setupMidiInput();
+    void teardownMidiInput();
+    void processMidiInputQueue();
+    void applyMidiTakeover(float dt);
+    glm::vec2 rainDirectionUnit() const;
+    glm::vec2 rainTangentUnit() const;
+    void getRainProjectionExtents(float& alongDirHalfExtent, float& alongTangentHalfExtent) const;
+    int midiAxisForCc(int cc) const;
+    std::string midiSourceName(MIDIEndpointRef source) const;
+    static void midiReadProc(const MIDIPacketList* packetList, void* readProcRefCon, void* srcConnRefCon);
+    void handleMidiPacketList(const MIDIPacketList* packetList);
 
     ofxNDISender ndiSender;
     ofxNDISendVideo ndiVideo;
@@ -104,10 +133,11 @@ private:
     bool paused = false;
     bool bUseBrownianDrunkMotion = true;
     bool airHockeyMode = false;
+    bool rainMode = false;
     float simTime = 0.0f;
-    bool autoBlobCount = true;
-    int manualBlobCount = 3;
-    int activeBlobLimit = 3;
+    bool autoBlobCount = false;
+    int manualBlobCount = 1;
+    int activeBlobLimit = 1;
     std::string manualBlobInput;
     bool edgeBounce = true;
     bool squareMotionBounds = false;
@@ -121,6 +151,30 @@ private:
     float blinkRateControl = 0.30f;
     bool magnetMode = false;
     float magnetStrength = 720.0f;
+    bool floodEnabled = false;
+    bool floodActive = false;
+    float floodRemainingSec = 0.0f;
+    float floodCooldownRemainingSec = 0.0f;
+    bool floodEdgeLatch = false;
+    float floodDurationSec = 2.6f;
+    float floodCooldownSec = 1.4f;
+    float rainAngleDeg = 90.0f; // 0=right, 90=down, 180=left, 270=up
+    bool midiTakeoverEnabled = false;
+    bool midiTakeoverPickUp = true;
+    bool midiTakeoverAllowRain = false;
+    int midiTakeoverChannel = 16;
+    std::array<int, 8> midiTakeoverCcMap{{20, 21, 22, 23, 24, 25, 26, 27}};
+    std::array<float, 8> midiTakeoverNorm{{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}};
+    std::array<bool, 8> midiTakeoverSeen{{false, false, false, false, false, false, false, false}};
+    std::array<bool, 8> midiTakeoverLatched{{false, false, false, false, false, false, false, false}};
+    std::string midiTakeoverStatus = "MIDI takeover ready";
+    int midiConnectedSourceCount = 0;
+#ifdef __APPLE__
+    MIDIClientRef midiClientRef = 0;
+    MIDIPortRef midiInputPortRef = 0;
+#endif
+    std::mutex midiQueueMutex;
+    std::vector<std::tuple<int, int, int>> midiCcQueue;
     std::array<SenderPreset, 4> presetSlots;
     int currentPresetSlot = -1;
     std::string presetStatus;

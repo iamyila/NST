@@ -8,6 +8,7 @@
 #include "ofxOsc.h"
 #include <map>
 #include <vector>
+#include <cstdint>
 
 namespace mtb{
     
@@ -46,6 +47,16 @@ namespace mtb{
         int sendVal(int label, int maxBlobNum, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
             ofxOscMessage m;
             int slot = getOscAddressSlot(label, maxBlobNum);
+            // Debug slot churn: only log when a slot changes owner, and only when log level allows.
+            auto itPrev = lastLabelBySlot.find(slot);
+            if (itPrev == lastLabelBySlot.end() || itPrev->second != label) {
+                const int prev = (itPrev == lastLabelBySlot.end()) ? -1 : itPrev->second;
+                ofLogNotice("OscSender") << "slot " << slot << " label " << prev << " -> " << label
+                                         << " y=" << (center.y / inputSize.y)
+                                         << " age=" << age
+                                         << " frame=" << frameCounter;
+                lastLabelBySlot[slot] = label;
+            }
             // One address per slot keeps compatibility with "route NDITracker1 ... NDITracker10".
             m.setAddress(oscAddressBase + ofToString(slot));
             m.addIntArg(label);
@@ -70,8 +81,10 @@ namespace mtb{
         void forceSingleLabelToSlot1(int label){
             labelToSlot.clear();
             labelLastSeenFrame.clear();
+            lastLabelBySlot.clear();
             labelToSlot[label] = 1;
             labelLastSeenFrame[label] = frameCounter;
+            lastLabelBySlot[1] = label;
             fallbackRoundRobinSlot = 1;
         }
 
@@ -105,8 +118,10 @@ namespace mtb{
         ofxOscSender sender;
         std::map<int, int> labelToSlot;
         std::map<int, uint64_t> labelLastSeenFrame;
+        std::map<int, int> lastLabelBySlot;
         uint64_t frameCounter = 0;
-        int slotStaleFrames = 2;
+        // More tolerant stale window reduces slot churn under brief detection dropouts.
+        int slotStaleFrames = 8;
         int fallbackRoundRobinSlot = 1;
 
     public:
