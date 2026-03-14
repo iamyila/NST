@@ -325,13 +325,26 @@ void ofApp::initShapes() {
 
     for (int i = 0; i < 10; ++i) {
         MovingShape s;
-        MotionBounds b = getMotionBounds(80.0f);
+        s.radius = ofRandom(18.0f, 48.0f);
+        MotionBounds b = getMotionBounds(s.radius);
         s.pos = glm::vec2(ofRandom(b.minX, b.maxX), ofRandom(b.minY, b.maxY));
+        for (int attempt = 0; attempt < 40; ++attempt) {
+            bool overlaps = false;
+            for (const auto& other : shapes) {
+                const float minDist = s.radius + other.radius + 14.0f;
+                if (glm::distance(s.pos, other.pos) < minDist) {
+                    overlaps = true;
+                    s.pos = glm::vec2(ofRandom(b.minX, b.maxX), ofRandom(b.minY, b.maxY));
+                    break;
+                }
+            }
+            if (!overlaps) break;
+        }
+
         s.vel = glm::vec2(ofRandomf(), ofRandomf()) * ofRandom(50.0f, 120.0f);
         s.walkDir = glm::normalize(glm::vec2(ofRandomf(), ofRandomf()));
         if (glm::length(s.walkDir) < 0.0001f) s.walkDir = glm::vec2(1.0f, 0.0f);
 
-        s.radius = ofRandom(18.0f, 48.0f);
         s.motion = (i % 2 == 0) ? MotionType::Brownian : MotionType::Drunkard;
         s.bRect = (i % 3 == 0);
 
@@ -340,6 +353,7 @@ void ofApp::initShapes() {
         s.blinkPhaseSec = ofRandom(0.0f, s.blinkPeriodSec);
         s.naturalOn = (ofRandomuf() < onDutyControl);
         s.stateRemainingSec = randomHoldDuration(s.naturalOn);
+        s.rainDormant = false;
 
         float hue = fmodf(i * 27.0f, 255.0f);
         s.color = ofColor::fromHsb(static_cast<unsigned char>(hue), 220, 255);
@@ -347,8 +361,8 @@ void ofApp::initShapes() {
     }
 
     if (rainMode) {
-        for (auto& s : shapes) {
-            resetShapeForRain(s, true);
+        for (std::size_t i = 0; i < shapes.size(); ++i) {
+            resetShapeForRain(shapes[i], true, static_cast<int>(i));
         }
     }
 }
@@ -367,6 +381,7 @@ void ofApp::updateBlinkStates(float dt) {
 }
 
 bool ofApp::isShapeOn(const MovingShape& shape) const {
+    if (rainMode) return shape.naturalOn && !shape.rainDormant;
     if (naturalBlink) return shape.naturalOn;
     if (shape.blinkPeriodSec <= 0.0001f) return true;
     float t = fmodf(simTime + shape.blinkPhaseSec, shape.blinkPeriodSec);
@@ -569,7 +584,7 @@ void ofApp::keepInsideFrame(MovingShape& shape) {
 
 void ofApp::keepInsideFrameAirHockey(MovingShape& shape) {
     MotionBounds b = getMotionBounds(shape.radius);
-    constexpr float restitution = 0.995f;
+    constexpr float restitution = 0.987f;
 
     if (shape.pos.x < b.minX) {
         shape.pos.x = b.minX + (b.minX - shape.pos.x);
@@ -639,13 +654,25 @@ void ofApp::updateShapes(float dt) {
     for (size_t idx = 0; idx < shapes.size(); ++idx) {
         auto& s = shapes[idx];
         if (rainMode) {
+            const int laneCount = std::max(1, std::min(8, activeBlobLimit > 0 ? activeBlobLimit : 8));
+            const int laneIndex = std::max(0, std::min(static_cast<int>(idx), laneCount - 1));
+            if (s.rainDormant) {
+                if (!floodEnabled || (!floodActive && floodCooldownRemainingSec <= 0.0f)) {
+                    resetShapeForRain(s, false, laneIndex);
+                }
+                continue;
+            }
+
             if (!s.naturalOn) {
                 s.naturalOn = true;
             }
 
             // Rain movement: flow direction set by rainAngleDeg + light lateral drift.
             const float floodMul = (floodEnabled && floodActive) ? 1.9f : 1.0f;
-            s.walkDir.x = ofClamp(s.walkDir.x + ofRandomf() * 18.0f * dt, -320.0f, 320.0f);
+            const float laneX = (static_cast<float>(laneIndex) + 1.0f) * (static_cast<float>(frameW) / (static_cast<float>(laneCount) + 1.0f));
+            const float laneErrorX = laneX - s.pos.x;
+            const float laneAssist = ofClamp(laneErrorX * 1.8f, -180.0f, 180.0f);
+            s.walkDir.x = ofClamp(s.walkDir.x + ofRandomf() * 0.35f * dt + laneAssist * 3.8f * dt, -28.0f, 28.0f);
             const float targetForward = s.walkDir.y * floodMul;
             const float targetLateral = s.walkDir.x * floodMul;
             const glm::vec2 targetVel = rainDir * targetForward + rainTan * targetLateral;
@@ -659,14 +686,21 @@ void ofApp::updateShapes(float dt) {
             applyCenterDeadZone(s, dt);
 
             if (idx < 8) {
-                rainEdgePeak = std::max(rainEdgePeak, edgeMetric01(s));
+                const float edgeNow = edgeMetric01(s);
+                rainEdgePeak = std::max(rainEdgePeak, edgeNow);
+                if (floodEnabled && edgeNow >= 0.985f) {
+                    s.naturalOn = false;
+                    s.rainDormant = true;
+                    s.vel = glm::vec2(0.0f, 0.0f);
+                    continue;
+                }
             }
 
             const float exitMargin = std::max(90.0f, s.radius * 2.6f);
             // Keep rain visually clean: spawn from above and only recycle once it has
             // clearly fallen past the bottom edge, not when it briefly clips a side.
             if (s.pos.y - s.radius > static_cast<float>(frameH) + exitMargin) {
-                resetShapeForRain(s, false);
+                resetShapeForRain(s, false, laneIndex);
             }
             continue;
         }
@@ -681,8 +715,8 @@ void ofApp::updateShapes(float dt) {
             }
 
             s.pos += s.vel * dt;
-            // Air-hockey feel: very low drag, keeps inertia after hits.
-            s.vel *= std::pow(0.9992f, dt * 60.0f);
+            // Air-hockey feel: lively, but should still bleed energy after repeated hits.
+            s.vel *= std::pow(0.9986f, dt * 60.0f);
 
             applyMagnetForce(s, dt, magnetTarget);
             applyCenterDeadZone(s, dt);
@@ -802,18 +836,21 @@ void ofApp::resetShapeForAirHockey(MovingShape& s) {
     s.stateRemainingSec = randomHoldDuration(true);
 }
 
-void ofApp::resetShapeForRain(MovingShape& s, bool firstInit) {
+void ofApp::resetShapeForRain(MovingShape& s, bool firstInit, int rainIndex) {
     const glm::vec2 dir = rainDirectionUnit();
     const glm::vec2 tan = rainTangentUnit();
     const float margin = std::max(60.0f, s.radius * 2.2f);
+    const int laneCount = std::max(1, std::min(8, activeBlobLimit > 0 ? activeBlobLimit : 8));
+    const int safeIndex = (rainIndex >= 0) ? std::min(rainIndex, laneCount - 1) : 0;
+    const float laneX = (static_cast<float>(safeIndex) + 1.0f) * (static_cast<float>(frameW) / (static_cast<float>(laneCount) + 1.0f));
 
-    const float lateral = ofRandom(-120.0f, 120.0f);
+    const float lateral = ofRandom(-2.0f, 2.0f);
     const float forward = ofRandom(210.0f, 360.0f);
     s.walkDir = glm::vec2(lateral, forward);
     s.vel = dir * forward + tan * lateral;
 
     const float topY = -margin - ofRandom(0.0f, margin * 0.9f);
-    const float entryX = ofRandom(s.radius, static_cast<float>(frameW) - s.radius);
+    const float entryX = ofClamp(laneX + ofRandom(firstInit ? -10.0f : -5.0f, firstInit ? 10.0f : 5.0f), s.radius, static_cast<float>(frameW) - s.radius);
     const float vy = (s.vel.y > 40.0f) ? s.vel.y : 40.0f;
     const float timeToTop = (-topY) / vy;
     float spawnX = entryX - s.vel.x * timeToTop;
@@ -824,14 +861,15 @@ void ofApp::resetShapeForRain(MovingShape& s, bool firstInit) {
 
     s.pos = glm::vec2(spawnX, topY);
     s.naturalOn = true;
+    s.rainDormant = false;
     s.stateRemainingSec = randomHoldDuration(true);
 }
 
 void ofApp::applyBlobRepulsion(float dt) {
     if (!collisionPhysics || dt <= 0.0f) return;
     const int n = static_cast<int>(shapes.size());
-    const float restitution = airHockeyMode ? 0.98f : 0.90f;
-    const float collisionScale = magnetMode ? 0.35f : 1.0f;
+    const float restitution = airHockeyMode ? 0.945f : 0.90f;
+    const float collisionScale = airHockeyMode ? 0.80f : (magnetMode ? 0.35f : 1.0f);
     for (int i = 0; i < n; ++i) {
         if (!isShapeOn(shapes[i])) continue;
         for (int j = i + 1; j < n; ++j) {
@@ -859,6 +897,16 @@ void ofApp::applyBlobRepulsion(float dt) {
                 const glm::vec2 impulse = jImpulse * nrm;
                 shapes[i].vel += impulse * invM1;
                 shapes[j].vel -= impulse * invM2;
+                if (airHockeyMode) {
+                    // Keep some life, just stop runaway energy build-up.
+                    shapes[i].vel *= 0.982f;
+                    shapes[j].vel *= 0.982f;
+                    const float maxHockeySpeed = 760.0f;
+                    const float spd1 = glm::length(shapes[i].vel);
+                    const float spd2 = glm::length(shapes[j].vel);
+                    if (spd1 > maxHockeySpeed) shapes[i].vel = glm::normalize(shapes[i].vel) * maxHockeySpeed;
+                    if (spd2 > maxHockeySpeed) shapes[j].vel = glm::normalize(shapes[j].vel) * maxHockeySpeed;
+                }
             }
 
             // Positional correction (prevents sinking/sticking).
@@ -955,7 +1003,7 @@ void ofApp::update() {
         activeBlobLimit = manualBlobCount;
     }
 
-    if (!airHockeyMode) {
+    if (!airHockeyMode && !rainMode) {
         updateBlinkStates(dt);
     }
     // Shape simulation now drives both motion modes.
@@ -1145,6 +1193,7 @@ void ofApp::keyPressed(int key) {
             manualBlobCount = 8;
             magnetMode = false;
             collisionPhysics = false;
+            // Rain should begin with all blobs continuously on until edge death/flood logic takes over.
             naturalBlink = false;
             onDutyControl = 0.90f;
             blinkRateControl = 0.20f;
@@ -1154,9 +1203,12 @@ void ofApp::keyPressed(int key) {
             floodCooldownRemainingSec = 0.0f;
             floodEdgeLatch = false;
             for (auto& s : shapes) {
-                resetShapeForRain(s, true);
+                resetShapeForRain(s, true, static_cast<int>(&s - &shapes[0]));
+                s.naturalOn = true;
+                s.rainDormant = false;
             }
         } else {
+            collisionPhysics = true;
             initShapes();
             applyPeriodicBlinkControls();
         }
@@ -1188,7 +1240,7 @@ void ofApp::keyPressed(int key) {
     else if (key == ',' || key == '<') {
         if (rainMode) {
             rainAngleDeg = wrapDegrees(rainAngleDeg - 5.0f);
-            for (auto& s : shapes) resetShapeForRain(s, true);
+            for (std::size_t i = 0; i < shapes.size(); ++i) resetShapeForRain(shapes[i], true, static_cast<int>(i));
         } else {
             magnetStrength = std::max(50.0f, magnetStrength - 50.0f);
         }
@@ -1196,7 +1248,7 @@ void ofApp::keyPressed(int key) {
     else if (key == '.' || key == '>') {
         if (rainMode) {
             rainAngleDeg = wrapDegrees(rainAngleDeg + 5.0f);
-            for (auto& s : shapes) resetShapeForRain(s, true);
+            for (std::size_t i = 0; i < shapes.size(); ++i) resetShapeForRain(shapes[i], true, static_cast<int>(i));
         } else {
             magnetStrength = std::min(3000.0f, magnetStrength + 50.0f);
         }
@@ -1270,8 +1322,11 @@ void ofApp::applyPreset(const SenderPreset& p) {
         midiTakeoverLatched.fill(false);
         autoBlobCount = false;
         manualBlobCount = std::min(static_cast<int>(shapes.size()), 8);
+        naturalBlink = false;
         for (auto& s : shapes) {
-            resetShapeForRain(s, true);
+            resetShapeForRain(s, true, static_cast<int>(&s - &shapes[0]));
+            s.naturalOn = true;
+            s.rainDormant = false;
         }
     }
 

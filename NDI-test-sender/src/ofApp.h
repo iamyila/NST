@@ -50,6 +50,7 @@ private:
         bool naturalOn = true;
         float stateRemainingSec = 1.0f;
         float lowSpeedAccumSec = 0.0f;
+        bool rainDormant = false;
     };
 
     struct SenderPreset {
@@ -90,7 +91,7 @@ private:
     void applyBlobRepulsion(float dt);
     void applyPushField(const glm::vec2& pt, float strength);
     void resetShapeForAirHockey(MovingShape& s);
-    void resetShapeForRain(MovingShape& s, bool firstInit);
+    void resetShapeForRain(MovingShape& s, bool firstInit, int rainIndex = -1);
     float randomHoldDuration(bool onState) const;
     ofRectangle getSliderRect(int sliderIndex) const;
     ofRectangle getFloodArmRect() const;

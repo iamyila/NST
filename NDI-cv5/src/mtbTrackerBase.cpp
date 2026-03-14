@@ -42,5 +42,9 @@ namespace mtb{
     void mtbTrackerBase::forceSingleBlobSlot1(int label){
         user->oscSender.forceSingleLabelToSlot1(label);
     }
+
+    void mtbTrackerBase::forceVisibleBlobSlotsToLowest(const std::vector<int>& labels){
+        user->oscSender.forceVisibleLabelsToLowestSlots(labels);
+    }
     
 }

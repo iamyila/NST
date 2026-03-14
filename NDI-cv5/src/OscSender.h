@@ -39,6 +39,7 @@ namespace mtb{
         
         int sendNoteOff(int label, int maxBlobNum){
             int slot = getOscAddressSlot(label, maxBlobNum);
+            sendDeathEvent(label, slot);
             // See sendNoteOn(): avoid injecting extra message shapes into legacy route chain.
             releaseOscAddressSlot(label);
             return slot;
@@ -88,6 +89,26 @@ namespace mtb{
             fallbackRoundRobinSlot = 1;
         }
 
+        void forceVisibleLabelsToLowestSlots(const std::vector<int>& labels){
+            if (labels.empty()) {
+                return;
+            }
+
+            lastLabelBySlot.clear();
+            for (std::size_t i = 0; i < labels.size(); ++i) {
+                const int label = labels[i];
+                const int slot = static_cast<int>(i) + 1;
+                labelToSlot[label] = slot;
+                labelLastSeenFrame[label] = frameCounter;
+                lastLabelBySlot[slot] = label;
+            }
+
+            fallbackRoundRobinSlot = static_cast<int>(labels.size()) + 1;
+            if (fallbackRoundRobinSlot < 1) {
+                fallbackRoundRobinSlot = 1;
+            }
+        }
+
         void sendMergeEvent(int prevCount, int currentCount, int label){
             ofxOscMessage m;
             m.setAddress(oscMergeAddress);
@@ -96,23 +117,47 @@ namespace mtb{
             m.addIntArg(label);
             sender.sendMessage(m, false);
         }
+
+        void sendDeathEvent(int label, int slot){
+            ofxOscMessage m;
+            m.setAddress(oscDeathAddress);
+            m.addIntArg(label);
+            m.addIntArg(slot);
+            sender.sendMessage(m, false);
+        }
         
         int getOscAddressSlot(int label, int maxBlobNum);
         void releaseOscAddressSlot(int label);
         
     private:
         glm::vec2 toPolar(float x, float y, float w, float h){
-            float tx = x/w*2.0 - 1.0;
-            float ty = (h-y)/h*2.0 - 1.0;
-            
-            float angle = 0;
-            if(!(tx==0 && ty==0)){
-                angle = atan2(tx, ty);
-                angle = ofRadToDeg(angle);
+            // Match the proven Blob 1/2/3/4 Max maths so Blob 5+ can read source-side
+            // azimuth/distance directly without doing a second conversion in Max.
+            const float xNorm = ofClamp(x / w, 0.0f, 1.0f);
+            const float yNorm = ofClamp(y / h, 0.0f, 1.0f);
+
+            const float cx = xNorm - 0.5f;
+            const float cy = (1.0f - yNorm) - 0.5f;
+
+            float angleNorm = 0.5f;
+            if (!(cx == 0.0f && cy == 0.0f)) {
+                angleNorm = 0.5f - std::atan2(-cx, cy) / 6.283185307179586f;
+                angleNorm -= std::floor(angleNorm);
             }
-            float len = sqrt(tx*tx + ty*ty);
-            len = ofMap(len, 0, 1.41421356, 0.01, 2.0, true);
-            return glm::vec2(angle, len);
+
+            // Compensate for the wide 16:9 frame so off-centre lanes do not collapse
+            // too aggressively toward the panner centre, and keep the usable range
+            // tighter so the default panner distance is not excessively large.
+            const float xWeight = std::max(w / std::max(h, 1.0f), 1.0f);
+            const float weightedCx = cx * xWeight;
+            const float maxRadius = std::sqrt((0.5f * xWeight) * (0.5f * xWeight) + 0.25f);
+            float distNorm = std::sqrt(weightedCx * weightedCx + cy * cy) / maxRadius;
+            distNorm = ofClamp(distNorm, 0.0f, 1.0f);
+            const float distanceFloor = 0.20f;
+            const float distanceCeiling = 0.50f;
+            distNorm = distanceFloor + ((distanceCeiling - distanceFloor) * distNorm);
+
+            return glm::vec2(angleNorm, distNorm);
         }
         
         ofxOscSender sender;
@@ -131,6 +176,7 @@ namespace mtb{
         // Legacy Max route object in AMXD matches symbols without a leading slash.
         const std::string oscAddressBase = "NDITracker";
         const std::string oscMergeAddress = "NDITrackerMerge";
+        const std::string oscDeathAddress = "NDITrackerDeath";
         ofParameterGroup grp{"OSC send", oscIp, oscPort};
         
         ofEventListeners listenerHolder;
