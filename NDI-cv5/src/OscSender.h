@@ -6,6 +6,7 @@
 
 #include "ofMain.h"
 #include "ofxOsc.h"
+#import <Foundation/Foundation.h>
 #include <map>
 #include <vector>
 #include <cstdint>
@@ -71,6 +72,10 @@ namespace mtb{
             glm::vec2 p = toPolar(center.x, center.y, inputSize.x, inputSize.y);
             m.addFloatArg(p.x);
             m.addFloatArg(p.y);
+            // edge proximity / hit for flood-style triggering
+            const glm::vec2 e = edgeValues(center.x, center.y, inputSize.x, inputSize.y);
+            m.addFloatArg(e.x);
+            m.addFloatArg(e.y);
             // Max route chains in this project expect plain OSC messages, not bundled packets.
             sender.sendMessage(m, false);
             
@@ -89,11 +94,30 @@ namespace mtb{
             fallbackRoundRobinSlot = 1;
         }
 
+        void forceLabelToSlot(int label, int slot){
+            if (slot < 1) slot = 1;
+            std::vector<int> toErase;
+            for (const auto& kv : labelToSlot) {
+                if (kv.first != label && kv.second == slot) {
+                    toErase.push_back(kv.first);
+                }
+            }
+            for (int otherLabel : toErase) {
+                labelToSlot.erase(otherLabel);
+                labelLastSeenFrame.erase(otherLabel);
+            }
+            labelToSlot[label] = slot;
+            labelLastSeenFrame[label] = frameCounter;
+            lastLabelBySlot[slot] = label;
+        }
+
         void forceVisibleLabelsToLowestSlots(const std::vector<int>& labels){
             if (labels.empty()) {
                 return;
             }
 
+            labelToSlot.clear();
+            labelLastSeenFrame.clear();
             lastLabelBySlot.clear();
             for (std::size_t i = 0; i < labels.size(); ++i) {
                 const int label = labels[i];
@@ -115,6 +139,7 @@ namespace mtb{
             m.addIntArg(prevCount);
             m.addIntArg(currentCount);
             m.addIntArg(label);
+            NSLog(@"NDITrackerMerge prev=%d current=%d label=%d frame=%llu", prevCount, currentCount, label, frameCounter);
             sender.sendMessage(m, false);
         }
 
@@ -123,6 +148,7 @@ namespace mtb{
             m.setAddress(oscDeathAddress);
             m.addIntArg(label);
             m.addIntArg(slot);
+            NSLog(@"NDITrackerDeath label=%d slot=%d frame=%llu", label, slot, frameCounter);
             sender.sendMessage(m, false);
         }
         
@@ -145,19 +171,23 @@ namespace mtb{
                 angleNorm -= std::floor(angleNorm);
             }
 
-            // Compensate for the wide 16:9 frame so off-centre lanes do not collapse
-            // too aggressively toward the panner centre, and keep the usable range
-            // tighter so the default panner distance is not excessively large.
-            const float xWeight = std::max(w / std::max(h, 1.0f), 1.0f);
-            const float weightedCx = cx * xWeight;
-            const float maxRadius = std::sqrt((0.5f * xWeight) * (0.5f * xWeight) + 0.25f);
-            float distNorm = std::sqrt(weightedCx * weightedCx + cy * cy) / maxRadius;
+            // Use a non-radial distance metric so diagonals do not get an artificial boost
+            // compared with pure X or Y movement.
+            float distNorm = std::max(std::abs(cx), std::abs(cy)) / 0.5f;
             distNorm = ofClamp(distNorm, 0.0f, 1.0f);
             const float distanceFloor = 0.20f;
             const float distanceCeiling = 0.50f;
             distNorm = distanceFloor + ((distanceCeiling - distanceFloor) * distNorm);
 
             return glm::vec2(angleNorm, distNorm);
+        }
+
+        glm::vec2 edgeValues(float x, float y, float w, float h){
+            const float xNorm = ofClamp(x / w, 0.0f, 1.0f);
+            const float yNorm = ofClamp(y / h, 0.0f, 1.0f);
+            const float edge = std::max(std::abs((xNorm * 2.0f) - 1.0f), std::abs((yNorm * 2.0f) - 1.0f));
+            const float hit = (edge >= 0.975f) ? 1.0f : 0.0f;
+            return glm::vec2(ofClamp(edge, 0.0f, 1.0f), hit);
         }
         
         ofxOscSender sender;

@@ -48,7 +48,7 @@ namespace mtb{
         void update(cv::Mat & currentMat) {
             //currentMat = ofxCv::toCv(currentImage);
             foregroundMat = ofxCv::toCv(foregroundImageOf);
-            pBackSub->apply(currentMat, foregroundMat);
+            pBackSub->apply(currentMat, foregroundMat, bgLearningRate);
             if(0<blurAmt) ofxCv::blur(foregroundMat, foregroundMat, blurAmt);
 
             if(bDrawReferenceImage){
@@ -112,14 +112,40 @@ namespace mtb{
                 });
             }
 
-            // Hard-stabilize single-blob routing: one visible blob must always map to slot 1.
             if (currs.size() == 1) {
-                forceSingleBlobSlot1(currs[0]);
-            } else if (currs.size() == 2) {
-                // With exactly two visible blobs, keep routing pinned to slots 1/2.
-                // This avoids stale slot ownership causing blob 3/4 retriggers.
-                std::vector<int> stableSlots(currs.begin(), currs.end());
-                forceVisibleBlobSlotsToLowest(stableSlots);
+                const int currentLabel = currs[0];
+                const cv::Rect& currentRect = tracker.getCurrent(currentLabel);
+                const glm::vec2 currentCenter(currentRect.x + currentRect.width / 2.0f,
+                                              currentRect.y + currentRect.height / 2.0f);
+
+                int targetSlot = -1;
+                float bestDistance = std::numeric_limits<float>::max();
+                for (const int prevLabel : prevSelectedBlobs) {
+                    auto itPrevCenter = prevSelectedCenters.find(prevLabel);
+                    if (itPrevCenter == prevSelectedCenters.end()) continue;
+                    const float d = glm::distance(currentCenter, itPrevCenter->second);
+                    if (d < bestDistance) {
+                        bestDistance = d;
+                        targetSlot = getOscAddressSlot(prevLabel);
+                    }
+                }
+
+                if (targetSlot > 0) {
+                    forceLabelToSlot(currentLabel, targetSlot);
+                } else {
+                    int liveSlotCount = 0;
+                    for (const auto& kv : noteOnSentMap) {
+                        const NoteOnInfo& info = kv.second;
+                        if (!info.bSent || info.bDead) continue;
+                        targetSlot = getOscAddressSlot(kv.first);
+                        liveSlotCount++;
+                    }
+                    if (liveSlotCount == 1 && targetSlot > 0) {
+                        forceLabelToSlot(currentLabel, targetSlot);
+                    } else if (liveSlotCount == 0) {
+                        forceSingleBlobSlot1(currentLabel);
+                    }
+                }
             }
             
             auto itrC = currs.begin();
@@ -180,62 +206,104 @@ namespace mtb{
 
             std::map<int, glm::vec2> currentSelectedCenters;
             std::map<int, float> currentSelectedAreas;
+            std::map<int, cv::Rect> currentSelectedRects;
             for (const int label : selectedBlobs) {
                 const cv::Rect& rect = tracker.getCurrent(label);
                 glm::vec2 center(rect.x + rect.width / 2.0f, rect.y + rect.height / 2.0f);
                 float area = (rect.width * rect.height) / static_cast<float>(foregroundMat.cols * foregroundMat.rows);
                 currentSelectedCenters[label] = center;
                 currentSelectedAreas[label] = area;
+                currentSelectedRects[label] = rect;
             }
 
-            // Merge event: previous frame had 2+ blobs, current frame collapsed to 1,
-            // and the remaining blob actually looks like a merge rather than one blob simply dying.
-            if (prevSelectedBlobCount >= 2 && static_cast<int>(selectedBlobs.size()) == 1) {
-                const int currentLabel = selectedBlobs[0];
-                const auto currCenterIt = currentSelectedCenters.find(currentLabel);
-                const auto currAreaIt = currentSelectedAreas.find(currentLabel);
+            // Merge event: previous frame had N blobs, current frame has N-1 blobs,
+            // and one current blob plausibly covers a close pair from the previous frame.
+            const int currentSelectedCount = static_cast<int>(selectedBlobs.size());
+            if (prevSelectedBlobCount >= 2 && currentSelectedCount == prevSelectedBlobCount - 1) {
+                const float proximityPx = std::max(40.0f, getTrackMatchDistancePx() * 0.75f);
+                const int rectMargin = 18;
+                bool mergeSent = false;
 
-                if (currCenterIt != currentSelectedCenters.end() && currAreaIt != currentSelectedAreas.end()) {
-                    glm::vec2 prevCentroid(0.0f, 0.0f);
-                    float prevMaxArea = 0.0f;
-                    float minPrevPairDistance = std::numeric_limits<float>::max();
-                    std::vector<glm::vec2> prevCenters;
-
-                    for (const int prevLabel : prevSelectedBlobs) {
-                        auto centerIt = prevSelectedCenters.find(prevLabel);
-                        auto areaIt = prevSelectedAreas.find(prevLabel);
-                        if (centerIt == prevSelectedCenters.end() || areaIt == prevSelectedAreas.end()) {
-                            continue;
-                        }
-                        prevCenters.push_back(centerIt->second);
-                        prevCentroid += centerIt->second;
-                        prevMaxArea = std::max(prevMaxArea, areaIt->second);
+                for (const int currentLabel : selectedBlobs) {
+                    const auto currCenterIt = currentSelectedCenters.find(currentLabel);
+                    const auto currAreaIt = currentSelectedAreas.find(currentLabel);
+                    const auto currRectIt = currentSelectedRects.find(currentLabel);
+                    if (currCenterIt == currentSelectedCenters.end() ||
+                        currAreaIt == currentSelectedAreas.end() ||
+                        currRectIt == currentSelectedRects.end()) {
+                        continue;
                     }
 
-                    if (prevCenters.size() >= 2 && prevMaxArea > 0.0f) {
-                        prevCentroid /= static_cast<float>(prevCenters.size());
-                        for (std::size_t i = 0; i < prevCenters.size(); ++i) {
-                            for (std::size_t j = i + 1; j < prevCenters.size(); ++j) {
-                                minPrevPairDistance = std::min(minPrevPairDistance, glm::distance(prevCenters[i], prevCenters[j]));
-                            }
+                    cv::Rect expandedCurrent = currRectIt->second;
+                    expandedCurrent.x -= rectMargin;
+                    expandedCurrent.y -= rectMargin;
+                    expandedCurrent.width += rectMargin * 2;
+                    expandedCurrent.height += rectMargin * 2;
+
+                    for (std::size_t i = 0; i < prevSelectedBlobs.size() && !mergeSent; ++i) {
+                        const int prevLabelA = prevSelectedBlobs[i];
+                        auto prevCenterAIt = prevSelectedCenters.find(prevLabelA);
+                        auto prevAreaAIt = prevSelectedAreas.find(prevLabelA);
+                        auto prevRectAIt = prevSelectedRects.find(prevLabelA);
+                        if (prevCenterAIt == prevSelectedCenters.end() ||
+                            prevAreaAIt == prevSelectedAreas.end() ||
+                            prevRectAIt == prevSelectedRects.end()) {
+                            continue;
                         }
 
-                        const float currentArea = currAreaIt->second;
-                        const float centroidDistance = glm::distance(currCenterIt->second, prevCentroid);
-                        const float proximityPx = std::max(40.0f, getTrackMatchDistancePx() * 0.75f);
-                        const bool areaComparable = currentArea >= (prevMaxArea * 0.85f);
-                        const bool clusterWasClose = minPrevPairDistance <= proximityPx;
-                        const bool nearPreviousCentroid = centroidDistance <= proximityPx;
+                        for (std::size_t j = i + 1; j < prevSelectedBlobs.size() && !mergeSent; ++j) {
+                            const int prevLabelB = prevSelectedBlobs[j];
+                            auto prevCenterBIt = prevSelectedCenters.find(prevLabelB);
+                            auto prevAreaBIt = prevSelectedAreas.find(prevLabelB);
+                            auto prevRectBIt = prevSelectedRects.find(prevLabelB);
+                            if (prevCenterBIt == prevSelectedCenters.end() ||
+                                prevAreaBIt == prevSelectedAreas.end() ||
+                                prevRectBIt == prevSelectedRects.end()) {
+                                continue;
+                            }
 
-                        if (areaComparable && clusterWasClose && nearPreviousCentroid) {
-                            sendMergeEvent(prevSelectedBlobCount, static_cast<int>(selectedBlobs.size()), currentLabel);
+                            const float pairDistance = glm::distance(prevCenterAIt->second, prevCenterBIt->second);
+                            if (pairDistance > proximityPx) {
+                                continue;
+                            }
+
+                            cv::Rect expandedPrevA = prevRectAIt->second;
+                            expandedPrevA.x -= rectMargin;
+                            expandedPrevA.y -= rectMargin;
+                            expandedPrevA.width += rectMargin * 2;
+                            expandedPrevA.height += rectMargin * 2;
+
+                            cv::Rect expandedPrevB = prevRectBIt->second;
+                            expandedPrevB.x -= rectMargin;
+                            expandedPrevB.y -= rectMargin;
+                            expandedPrevB.width += rectMargin * 2;
+                            expandedPrevB.height += rectMargin * 2;
+
+                            const bool overlapsA = (expandedCurrent & expandedPrevA).area() > 0;
+                            const bool overlapsB = (expandedCurrent & expandedPrevB).area() > 0;
+                            if (!overlapsA || !overlapsB) {
+                                continue;
+                            }
+
+                            const glm::vec2 pairCentroid = (prevCenterAIt->second + prevCenterBIt->second) * 0.5f;
+                            const float centroidDistance = glm::distance(currCenterIt->second, pairCentroid);
+                            const float pairMaxArea = std::max(prevAreaAIt->second, prevAreaBIt->second);
+                            const bool areaComparable = currAreaIt->second >= (pairMaxArea * 0.85f);
+                            const bool nearPairCentroid = centroidDistance <= proximityPx;
+
+                            if (areaComparable && nearPairCentroid) {
+                                sendMergeEvent(prevSelectedBlobCount, currentSelectedCount, currentLabel);
+                                mergeSent = true;
+                            }
                         }
                     }
                 }
             }
+
             prevSelectedBlobCount = static_cast<int>(selectedBlobs.size());
             prevSelectedCenters = currentSelectedCenters;
             prevSelectedAreas = currentSelectedAreas;
+            prevSelectedRects = currentSelectedRects;
             
             // Process Dead blobs, just mark bDead
             auto & deads = tracker.getDeadLabels();
@@ -420,6 +488,9 @@ namespace mtb{
 
         std::map<int, glm::vec2> prevSelectedCenters;
         std::map<int, float> prevSelectedAreas;
+        std::map<int, cv::Rect> prevSelectedRects;
+        std::vector<cv::Rect> prevContourRects;
+        bool mergeContactLatched = false;
     
         //ofPixels foregroundPix;
         ofImage foregroundImageOf;
@@ -431,8 +502,9 @@ namespace mtb{
         
         ofParameter<int> bgAlgo{"Background Subtractor Algo", 1, 0, 1};
         ofParameter<float> blurAmt{ "Blur amount", 3, 0, 20 };
+        ofParameter<float> bgLearningRate{ "BG Learning Rate", 0.001f, 0.0f, 0.05f };
         ofParameter<bool> bDrawReferenceImage{ "Draw Reference Image", false };
-        ofParameterGroup bgGrp{"BG", bgAlgo, blurAmt, bDrawReferenceImage};
+        ofParameterGroup bgGrp{"BG", bgAlgo, blurAmt, bgLearningRate, bDrawReferenceImage};
     };
     
 }

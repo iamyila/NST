@@ -68,6 +68,7 @@ private:
         bool collisionPhysics = true;
         float collisionStrength = 1200.0f;
         bool naturalBlink = true;
+        bool alwaysOnMode = false;
         float onDutyControl = 0.72f;
         float blinkRateControl = 0.30f;
         bool magnetMode = false;
@@ -148,6 +149,7 @@ private:
     float collisionStrength = 1200.0f;
     float pushStrength = 1800.0f;
     bool naturalBlink = true;
+    bool alwaysOnMode = false;
     float onDutyControl = 0.72f;
     float blinkRateControl = 0.30f;
     bool magnetMode = false;
@@ -163,10 +165,12 @@ private:
     bool midiTakeoverEnabled = false;
     bool midiTakeoverPickUp = true;
     bool midiTakeoverAllowRain = false;
+    bool showHelpOverlay = false;
     int midiTakeoverChannel = 16;
-    std::array<int, 8> midiTakeoverCcMap{{20, 21, 22, 23, 24, 25, 26, 27}};
+    std::array<int, 8> midiTakeoverCcMap{{0, 1, 6, 7, 8, 9, 10, 11}};
     std::array<float, 8> midiTakeoverNorm{{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}};
     std::array<bool, 8> midiTakeoverSeen{{false, false, false, false, false, false, false, false}};
+    std::array<bool, 8> midiTakeoverUpdated{{false, false, false, false, false, false, false, false}};
     std::array<bool, 8> midiTakeoverLatched{{false, false, false, false, false, false, false, false}};
     std::string midiTakeoverStatus = "MIDI takeover ready";
     int midiConnectedSourceCount = 0;
