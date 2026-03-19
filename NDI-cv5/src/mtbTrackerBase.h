@@ -98,6 +98,7 @@ namespace mtb{
         int getOscAddressSlot(int label);
         int sendNoteOn(int label);
         int sendNoteOff(int label);
+        int sendDeathNow(int label);
         int sendVal(int label, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize);
         void sendMergeEvent(int prevCount, int currentCount, int label);
         void beginOscFrame();
@@ -148,13 +149,13 @@ namespace mtb{
         ofParameter<float> maxArea{ "maxArea", 350, 0, 500 };
         ofParameter<bool> bFindHoles{ "find holes", false };
         ofParameter<bool> bSimplify{ "simplify", false };
-        ofParameter<float> trackHoldStrictness{ "Track Hold Strictness (0 normal, 100 strict)", 10, 0, 100 };
-        ofParameter<float> trackMatchStrictness{ "Track Match Strictness (0 normal, 100 strict)", 10, 0, 100 };
+        ofParameter<float> trackHoldStrictness{ "Track Hold Strictness (0 normal, 100 strict)", 0, 0, 100 };
+        ofParameter<float> trackMatchStrictness{ "Track Match Strictness (0 normal, 100 strict)", 0, 0, 100 };
         //ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
         ofParameter<int> maxBlobCandidate{ "Max blob candidate", 10, 1, 100 };
         ofParameter<bool> bDrawCandidates{ "Draw Candidates", true};
         ofParameter<int> maxBlobNum{ "Max blob num", 8, 1, 10 };
-        ofParameter<int> minAge{ "Min age", 12, 0, 60 };
+        ofParameter<int> minAge{ "Min age", 4, 0, 60 };
         // Stricter admission age when already tracking two or more blobs.
         // Helps avoid transient false positives stealing extra voices.
         ofParameter<int> extraVoiceMinAge{ "Extra voice min age", 20, 0, 120 };

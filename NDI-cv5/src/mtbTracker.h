@@ -311,6 +311,9 @@ namespace mtb{
             for(; itrD<deads.end(); ++itrD){
                 int label = *itrD;
                 if(noteOnSentMap.count(label) != 0){
+                    if(!noteOnSentMap[label].bDead){
+                        sendDeathNow(label);
+                    }
                     noteOnSentMap[label].bDead = true;
                     noteOnSentMap[label].framesAfterDeath = 0;
                 }
@@ -500,7 +503,7 @@ namespace mtb{
         //cv::Mat currentMat;
         cv::Mat foregroundMat;
         
-        ofParameter<int> bgAlgo{"Background Subtractor Algo", 1, 0, 1};
+        ofParameter<int> bgAlgo{"Background Subtractor Algo", 0, 0, 1};
         ofParameter<float> blurAmt{ "Blur amount", 3, 0, 20 };
         ofParameter<float> bgLearningRate{ "BG Learning Rate", 0.001f, 0.0f, 0.05f };
         ofParameter<bool> bDrawReferenceImage{ "Draw Reference Image", false };

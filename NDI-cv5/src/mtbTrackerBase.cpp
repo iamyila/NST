@@ -26,6 +26,10 @@ namespace mtb{
     int mtbTrackerBase::sendNoteOff(int label){
         return user->oscSender.sendNoteOff(label, maxBlobNum);
     }
+
+    int mtbTrackerBase::sendDeathNow(int label){
+        return user->oscSender.sendDeathNow(label, maxBlobNum);
+    }
     
     int mtbTrackerBase::sendVal(int label, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
         return user->oscSender.sendVal(label, maxBlobNum, vel, area, age, center, inputSize);

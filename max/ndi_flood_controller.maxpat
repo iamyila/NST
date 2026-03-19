@@ -50,14 +50,27 @@
       {
         "box": {
           "maxclass": "newobj",
-          "text": "route NDITracker1 NDITracker2 NDITracker3 NDITracker4 NDITracker5 NDITracker6 NDITracker7 NDITracker8",
+          "text": "route NDITracker1 NDITracker2 NDITracker3 NDITracker4 NDITracker5 NDITracker6 NDITracker7 NDITracker8 NDITrackerDeath",
           "patching_rect": [
             20.0,
             76.0,
             620.0,
             22.0
           ],
-          "id": "obj-3"
+          "id": "obj-3",
+          "numoutlets": 10,
+          "outlettype": [
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
         }
       },
       {
@@ -503,7 +516,7 @@
           "maxclass": "comment",
           "numinlets": 1,
           "numoutlets": 0,
-          "text": "Edge",
+          "text": "Y",
           "patching_rect": [
             910.0,
             44.0,
@@ -3320,6 +3333,80 @@
             "float"
           ]
         }
+      },
+      {
+        "box": {
+          "id": "death_unpack",
+          "maxclass": "newobj",
+          "text": "unpack i i",
+          "numinlets": 1,
+          "numoutlets": 2,
+          "outlettype": [
+            "int",
+            "int"
+          ],
+          "patching_rect": [
+            760.0,
+            112.0,
+            64.0,
+            22.0
+          ]
+        }
+      },
+      {
+        "box": {
+          "id": "death_eq",
+          "maxclass": "newobj",
+          "text": "expr $i1==$i2",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "outlettype": [
+            "int"
+          ],
+          "patching_rect": [
+            760.0,
+            144.0,
+            84.0,
+            22.0
+          ]
+        }
+      },
+      {
+        "box": {
+          "id": "death_sel",
+          "maxclass": "newobj",
+          "text": "sel 1",
+          "numinlets": 2,
+          "numoutlets": 2,
+          "outlettype": [
+            "bang",
+            ""
+          ],
+          "patching_rect": [
+            760.0,
+            176.0,
+            36.0,
+            22.0
+          ]
+        }
+      },
+      {
+        "box": {
+          "id": "death_zero",
+          "maxclass": "message",
+          "text": "0",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "outlettype": [
+            ""
+          ],
+          "patching_rect": [
+            760.0,
+            208.0,
+            29.5,
+            22.0
+          ]
+        }
       }
     ],
     "lines": [
@@ -3963,7 +4050,7 @@
         "patchline": {
           "source": [
             "f_blob_unpack",
-            8
+            2
           ],
           "destination": [
             "obj-17",
@@ -4087,6 +4174,102 @@
           ],
           "destination": [
             "f_hit_lane",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "obj-3",
+            8
+          ],
+          "destination": [
+            "death_unpack",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "death_unpack",
+            1
+          ],
+          "destination": [
+            "death_eq",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "blob_sel_clip",
+            0
+          ],
+          "destination": [
+            "death_eq",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "death_eq",
+            0
+          ],
+          "destination": [
+            "death_sel",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "death_sel",
+            0
+          ],
+          "destination": [
+            "death_zero",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "death_zero",
+            0
+          ],
+          "destination": [
+            "obj-17",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "death_zero",
+            0
+          ],
+          "destination": [
+            "f_hit_pulse_norm",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "death_zero",
+            0
+          ],
+          "destination": [
+            "f_env_norm",
             0
           ]
         }

@@ -37,10 +37,17 @@ namespace mtb{
             // Keep API return value for tracker bookkeeping, but don't emit separate OSC events.
             return slot;
         }
+
+        int sendDeathNow(int label, int maxBlobNum){
+            int slot = getOscAddressSlot(label, maxBlobNum);
+            sendDeathEvent(label, slot);
+            return slot;
+        }
         
         int sendNoteOff(int label, int maxBlobNum){
             int slot = getOscAddressSlot(label, maxBlobNum);
-            sendDeathEvent(label, slot);
+            // Death is emitted at tracker-loss time now, so flood resets immediately
+            // instead of waiting for the hold window to expire.
             // See sendNoteOn(): avoid injecting extra message shapes into legacy route chain.
             releaseOscAddressSlot(label);
             return slot;
