@@ -16,6 +16,10 @@ namespace mtb{
     class mtbTrackerBase{
         
     public:
+
+        virtual int getDisplayAgeForLabel(int label) {
+            return finder.getTracker().getAge(label);
+        }
         
         void registerUser(NDISource * s);
         virtual void setup(string name, int w, int h, bool ndiOut) = 0;
@@ -37,8 +41,7 @@ namespace mtb{
         }
         
         void drawLabelAndAge(int label, int x=0, int y=0){
-            auto & tracker = finder.getTracker();
-            int age = tracker.getAge(label);
+            int age = getDisplayAgeForLabel(label);
             char c[255];
             sprintf(c, "%3i:%3i", label, age);
             ofDrawBitmapString(c, x, y);
@@ -52,7 +55,6 @@ namespace mtb{
             for(; itr!=selectedBlobs.end(); itr++){
                 int label = *itr;
                 bool bNoteOnSent = isNoteOnSent(label);
-                int age = tracker.getAge(label);
                 bNoteOnSent ? ofSetHexColor(0xff0099) : ofSetColor(220);
                 drawLabelAndAge(label, 0, 10+i*15);
                 i++;
@@ -108,7 +110,7 @@ namespace mtb{
 
         // UI is strictness-based: higher values are stricter (shorter hold / smaller match distance).
         int getTrackHoldFrames() const {
-            return static_cast<int>(ofMap(trackHoldStrictness, 0.0f, 100.0f, 16.0f, 1.0f, true));
+            return static_cast<int>(ofMap(trackHoldStrictness, 0.0f, 100.0f, 48.0f, 6.0f, true));
         }
 
         float getTrackMatchDistancePx() const {
@@ -154,20 +156,24 @@ namespace mtb{
         //ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
         ofParameter<int> maxBlobCandidate{ "Max blob candidate", 10, 1, 100 };
         ofParameter<bool> bDrawCandidates{ "Draw Candidates", true};
-        ofParameter<int> maxBlobNum{ "Max blob num", 8, 1, 10 };
-        ofParameter<int> minAge{ "Min age", 4, 0, 60 };
+        ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
+        ofParameter<int> minAge{ "Min age", 1, 0, 60 };
         // Stricter admission age when already tracking two or more blobs.
         // Helps avoid transient false positives stealing extra voices.
-        ofParameter<int> extraVoiceMinAge{ "Extra voice min age", 20, 0, 120 };
-        // 0 = Blob (current implementation), 1 = YOLO (scaffold placeholder).
-        ofParameter<int> trackingTechnique{ "Tracking Technique (0 Blob, 1 YOLO)", 0, 0, 1 };
-        ofParameter<string> yoloModelPath{ "YOLO ONNX Path", "/Users/alastairmcneill/Documents/GitHub/NST/NST1/models/yolov8n.onnx" };
-        ofParameter<int> yoloInputSize{ "YOLO Input Size", 640, 320, 1280 };
-        ofParameter<float> yoloConfidenceThreshold{ "YOLO Confidence", 0.35f, 0.01f, 0.99f };
-        ofParameter<float> yoloNmsThreshold{ "YOLO NMS", 0.45f, 0.0f, 0.99f };
-        ofParameter<string> yoloClassFilter{ "YOLO Class Filter", "" };
+        ofParameter<int> extraVoiceMinAge{ "Extra voice min age", 2, 0, 120 };
+        // 0 = Blob, 1 = YOLO. NST1 defaults to YOLO.
+        ofParameter<int> trackingTechnique{ "Tracking Technique (0 Blob, 1 YOLO)", 1, 0, 1 };
+        ofParameter<string> yoloModelPath{ "YOLO ONNX Path", "/Users/alastairmcneill/Documents/GitHub/NST/NST1/models/yolov8n_416.onnx" };
+        ofParameter<string> yoloCoreMLModelPath{ "YOLO CoreML Path", "/Users/alastairmcneill/Documents/GitHub/NST/NST1/models/yolov8n_416.mlmodelc" };
+        ofParameter<int> yoloInputSize{ "YOLO Input Size", 416, 416, 416 };
+        ofParameter<float> yoloConfidenceThreshold{ "YOLO Confidence", 0.05f, 0.01f, 0.99f };
+        ofParameter<float> yoloNmsThreshold{ "YOLO NMS", 0.60f, 0.0f, 0.99f };
+        ofParameter<string> yoloClassFilter{ "YOLO Class Filter", "person,car,cat" };
+        ofParameter<bool> yoloRawMode{ "YOLO Raw Mode", false };
+        ofParameter<bool> yoloMotionGate{ "YOLO Motion Gate", false };
         ofParameter<bool> yoloDrawClassNames{ "YOLO Draw Class Names", true };
-        ofParameterGroup yoloGrp{ "YOLO", yoloModelPath, yoloInputSize, yoloConfidenceThreshold, yoloNmsThreshold, yoloClassFilter, yoloDrawClassNames };
-        ofParameterGroup grp{ "Tracker", trackingTechnique, minArea, maxArea, bFindHoles, bSimplify, trackHoldStrictness, trackMatchStrictness, /*smoothingRate,*/ bDrawCandidates, maxBlobCandidate, maxBlobNum, minAge, extraVoiceMinAge, /*blobScale */};
+        ofParameterGroup yoloGrp{ "YOLO", yoloConfidenceThreshold, yoloNmsThreshold, yoloClassFilter, yoloRawMode, yoloDrawClassNames };
+        ofParameterGroup trackerAdvancedGrp{ "Tracking Advanced", bDrawCandidates };
+        ofParameterGroup grp{ "Tracker", yoloGrp, trackerAdvancedGrp };
     };
 }

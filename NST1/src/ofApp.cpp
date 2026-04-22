@@ -7,8 +7,15 @@ const std::string kGuiSettingsFile = "settings_v2.json";
 
 void ofApp::setup(){
 
-	ofSetWindowShape(700, 1000);
+	ofSetWindowShape(1600, 1200);
 	ofSetWindowPosition(0, 25);
+    if (const char* snapshotPath = std::getenv("NST1_SELFTEST_SNAPSHOT_PATH")) {
+        selfTestSnapshotPath = snapshotPath;
+    }
+    if (const char* snapshotFrame = std::getenv("NST1_SELFTEST_SNAPSHOT_FRAME")) {
+        const int parsed = std::max(1, std::atoi(snapshotFrame));
+        selfTestSnapshotFrame = parsed;
+    }
     NDIlib_initialize();
 
     for(int i=0; i<1; i++){
@@ -62,7 +69,16 @@ void ofApp::applySelectedNDISource(){
         return;
     }
 
-    const int idx = ofClamp(ndiSourceIndex.get(), 0, static_cast<int>(availableNDISources.size()) - 1);
+    int idx = ofClamp(ndiSourceIndex.get(), 0, static_cast<int>(availableNDISources.size()) - 1);
+    const std::string preferredSource = "NST Motion Test 3D";
+    for (int i = 0; i < static_cast<int>(availableNDISources.size()); ++i) {
+        const std::string sourceNameUpper = ofToUpper(availableNDISources[i].p_ndi_name);
+        if (ofIsStringInString(sourceNameUpper, ofToUpper(preferredSource))) {
+            idx = i;
+            break;
+        }
+    }
+    ndiSourceIndex = idx;
     const std::string selected = availableNDISources[idx].p_ndi_name;
     ndiSourceName = "[" + ofToString(idx + 1) + "/" + ofToString(availableNDISources.size()) + "] " + selected;
     for (auto &ndi : ndis) {
@@ -177,6 +193,12 @@ void ofApp::draw(){
     const float helpY = ofGetHeight() - 92.0f;
     ofDrawBitmapStringHighlight(shortcuts, helpX, helpY);
     ofPopStyle();
+
+    if (!selfTestSnapshotSaved && !selfTestSnapshotPath.empty() && ofGetFrameNum() >= selfTestSnapshotFrame) {
+        ofSaveScreen(selfTestSnapshotPath);
+        ofLogNotice("NST1") << "Saved self-test snapshot to " << selfTestSnapshotPath;
+        selfTestSnapshotSaved = true;
+    }
 
 }
 

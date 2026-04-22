@@ -40,6 +40,8 @@ tests/**/gcc-release/
 *.mode*
 *.app/
 *.pyc
+.venv/
+**/.venv/
 .svn/
 *.log
 *.cpp.eep

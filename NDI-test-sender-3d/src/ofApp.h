@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ofMain.h"
+#include "ofxAssimpModelLoader.h"
 #include "ofxNDISender.h"
 #include "ofxNDISendStream.h"
 #include <array>
@@ -40,20 +41,20 @@ public:
     enum class ObjectKind {
         Person,
         Hand,
+        Cat,
         Dog,
         PlainObject,
-        Square,
-        Star
+        Car
     };
 
     enum class ObjectPreset {
         Mixed,
         People,
         Hands,
+        Cats,
         Dogs,
         PlainObjects,
-        Squares,
-        Stars
+        Cars
     };
 
 private:
@@ -94,7 +95,7 @@ private:
         bool collisionPhysics = true;
         float collisionStrength = 1200.0f;
         bool naturalBlink = true;
-        bool alwaysOnMode = false;
+        bool alwaysOnMode = true;
         float onDutyControl = 0.72f;
         float blinkRateControl = 0.30f;
         bool magnetMode = false;
@@ -104,9 +105,9 @@ private:
         float floodCooldownSec = 1.4f;
         float rainAngleDeg = 90.0f;
         float viewYawDeg = 0.0f;
-        float viewPitchDeg = 89.0f;
+        float viewPitchDeg = 18.0f;
         float observerOffsetX = 0.0f;
-        float observerDistanceY = 160.0f;
+        float observerDistanceY = 130.0f;
         bool midiTakeoverEnabled = false;
         bool midiTakeoverPickUp = true;
         int objectPreset = 0;
@@ -127,21 +128,30 @@ private:
     float randomHoldDuration(bool onState) const;
     void updateDepthState(MovingShape& s, float dt, int idx);
     glm::vec3 shapeWorldPoint(const MovingShape& s) const;
+    float shapeWorldCollisionRadius(const MovingShape& shape) const;
+    glm::vec2 velocityScreenToWorld(const glm::vec2& screenVel) const;
+    glm::vec2 velocityWorldToScreen(const glm::vec2& worldVel) const;
     glm::vec3 cameraTargetWorld() const;
     glm::vec3 cameraEyeWorld() const;
     bool projectWorldPoint(const glm::vec3& worldPoint, glm::vec2& screenPoint, float* cameraDepth = nullptr) const;
     float projectScaleAtWorld(const glm::vec3& worldPoint) const;
     float projectRadius(const MovingShape& s) const;
-    void drawShape3D(const MovingShape& s, int idx) const;
+    void drawShape3D(const MovingShape& s, int idx);
+    bool drawCatModel3D(const MovingShape& s);
+    bool drawPersonModel3D(const MovingShape& s);
+    bool drawCarModel3D(const MovingShape& s);
     void drawPersonGlyph(const glm::vec2& p, float size) const;
     void drawHandGlyph(const glm::vec2& p, float size) const;
+    void drawCatGlyph(const glm::vec2& p, float size, float yawDeg) const;
     void drawDogGlyph(const glm::vec2& p, float size, float yawDeg) const;
     void drawPlainObjectGlyph(const glm::vec2& p, float size, float yawDeg) const;
-    void drawStarGlyph(const glm::vec2& p, float size, int points = 5) const;
     void drawListenerHead() const;
     void drawGroundPlane() const;
     void drawHemisphereOverlay() const;
     void drawTopDownOverview() const;
+    void loadCatModel();
+    void loadPersonModel();
+    void loadCarModel();
     void assignObjectPreset();
     std::string objectPresetName() const;
     ofRectangle getSliderRect(int sliderIndex) const;
@@ -173,12 +183,41 @@ private:
 
     ofxNDISender ndiSender;
     ofxNDISendVideo ndiVideo;
+    ofxAssimpModelLoader catModel;
+    ofVboMesh catObjMesh;
+    ofImage catObjTexture;
+    ofVboMesh personObjMesh;
+    ofImage personObjTexture;
+    ofVboMesh carObjMesh;
+    ofImage carObjTexture;
 
     ofFbo fbo;
     ofPixels pixels;
     std::vector<MovingShape> shapes;
+    bool catObjLoaded = false;
+    bool catObjTextureLoaded = false;
+    bool personObjLoaded = false;
+    bool personObjTextureLoaded = false;
+    bool carObjLoaded = false;
+    bool carObjTextureLoaded = false;
+    bool catModelLoaded = false;
+    std::vector<ofMesh> catModelMeshes;
+    glm::vec3 catModelMin{0.0f};
+    glm::vec3 catModelMax{0.0f};
+    float catModelHeight = 1.0f;
+    float catModelDepth = 1.0f;
+    glm::vec3 personModelMin{0.0f};
+    glm::vec3 personModelMax{0.0f};
+    float personModelHeight = 1.0f;
+    float personModelDepth = 1.0f;
+    glm::vec3 carModelMin{0.0f};
+    glm::vec3 carModelMax{0.0f};
+    float carModelHeight = 1.0f;
+    float carModelDepth = 1.0f;
 
     std::string streamName = "NST Motion Test 3D";
+    float ndiSendTargetFps = 30.0f;
+    double lastNdiSendTimeSec = -1.0;
     int frameW = 1280;
     int frameH = 720;
     float speed = 1.0f;
@@ -188,8 +227,8 @@ private:
     bool rainMode = false;
     float simTime = 0.0f;
     bool autoBlobCount = false;
-    int manualBlobCount = 1;
-    int activeBlobLimit = 1;
+    int manualBlobCount = 3;
+    int activeBlobLimit = 3;
     std::string manualBlobInput;
     bool edgeBounce = true;
     bool squareMotionBounds = false;
@@ -199,7 +238,7 @@ private:
     float collisionStrength = 1200.0f;
     float pushStrength = 1800.0f;
     bool naturalBlink = true;
-    bool alwaysOnMode = false;
+    bool alwaysOnMode = true;
     float onDutyControl = 0.72f;
     float blinkRateControl = 0.30f;
     bool magnetMode = false;
@@ -214,9 +253,9 @@ private:
     float rainAngleDeg = 90.0f; // 0=right, 90=down, 180=left, 270=up
     ObjectPreset objectPreset = ObjectPreset::Mixed;
     float viewYawDeg = 0.0f;
-    float viewPitchDeg = 89.0f;
+    float viewPitchDeg = 18.0f;
     float observerOffsetX = 0.0f;
-    float observerDistanceY = 160.0f;
+    float observerDistanceY = 130.0f;
     bool midiTakeoverEnabled = false;
     bool midiTakeoverPickUp = true;
     bool midiTakeoverAllowRain = false;
@@ -239,6 +278,7 @@ private:
     int currentPresetSlot = -1;
     std::string presetStatus;
     float presetStatusUntil = 0.0f;
+    bool startupSnapshotSaved = false;
 
     void commitManualBlobInput();
 };

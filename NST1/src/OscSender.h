@@ -203,7 +203,7 @@ namespace mtb{
         std::map<int, int> lastLabelBySlot;
         uint64_t frameCounter = 0;
         // More tolerant stale window reduces slot churn under brief detection dropouts.
-        int slotStaleFrames = 8;
+        int slotStaleFrames = 48;
         int fallbackRoundRobinSlot = 1;
 
     public:

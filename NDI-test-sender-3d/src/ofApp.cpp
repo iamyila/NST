@@ -1,5 +1,6 @@
 #include "ofApp.h"
 #include <cmath>
+#include <limits>
 #include <sstream>
 
 namespace {
@@ -32,10 +33,10 @@ const char* objectPresetLabel(ofApp::ObjectPreset preset) {
         case ofApp::ObjectPreset::Mixed: return "Mixed";
         case ofApp::ObjectPreset::People: return "People";
         case ofApp::ObjectPreset::Hands: return "Hands";
+        case ofApp::ObjectPreset::Cats: return "Cats";
         case ofApp::ObjectPreset::Dogs: return "Dogs";
-        case ofApp::ObjectPreset::PlainObjects: return "Objects";
-        case ofApp::ObjectPreset::Squares: return "Squares";
-        case ofApp::ObjectPreset::Stars: return "Stars";
+        case ofApp::ObjectPreset::PlainObjects: return "Cubes";
+        case ofApp::ObjectPreset::Cars: return "Cars";
     }
     return "Mixed";
 }
@@ -44,19 +45,19 @@ ofApp::ObjectKind objectKindForPreset(ofApp::ObjectPreset preset, int index) {
     switch (preset) {
         case ofApp::ObjectPreset::People: return ofApp::ObjectKind::Person;
         case ofApp::ObjectPreset::Hands: return ofApp::ObjectKind::Hand;
+        case ofApp::ObjectPreset::Cats: return ofApp::ObjectKind::Cat;
         case ofApp::ObjectPreset::Dogs: return ofApp::ObjectKind::Dog;
         case ofApp::ObjectPreset::PlainObjects: return ofApp::ObjectKind::PlainObject;
-        case ofApp::ObjectPreset::Squares: return ofApp::ObjectKind::Square;
-        case ofApp::ObjectPreset::Stars: return ofApp::ObjectKind::Star;
+        case ofApp::ObjectPreset::Cars: return ofApp::ObjectKind::Car;
         case ofApp::ObjectPreset::Mixed:
         default: {
             const ofApp::ObjectKind kinds[] = {
                 ofApp::ObjectKind::Person,
-                ofApp::ObjectKind::Hand,
+                ofApp::ObjectKind::Cat,
+                ofApp::ObjectKind::Car,
                 ofApp::ObjectKind::Dog,
+                ofApp::ObjectKind::Hand,
                 ofApp::ObjectKind::PlainObject,
-                ofApp::ObjectKind::Square,
-                ofApp::ObjectKind::Star
             };
             return kinds[index % (sizeof(kinds) / sizeof(kinds[0]))];
         }
@@ -81,6 +82,185 @@ glm::vec2 clampWorldToCircle(const glm::vec2& worldPoint, float allowedRadius) {
     const float dist = glm::length(worldPoint);
     if (dist <= allowedRadius || dist <= 0.0001f) return worldPoint;
     return (worldPoint / dist) * allowedRadius;
+}
+
+int parseObjIndex(const std::string& token, std::size_t vertexCount) {
+    const auto slashPos = token.find('/');
+    const std::string raw = token.substr(0, slashPos);
+    if (raw.empty()) return -1;
+
+    const int idx = std::stoi(raw);
+    if (idx > 0) return idx - 1;
+    if (idx < 0) return static_cast<int>(vertexCount) + idx;
+    return -1;
+}
+
+int parseObjComponentIndex(const std::string& raw, std::size_t count) {
+    if (raw.empty()) return -1;
+
+    const int idx = std::stoi(raw);
+    if (idx > 0) return idx - 1;
+    if (idx < 0) return static_cast<int>(count) + idx;
+    return -1;
+}
+
+struct ObjFaceRef {
+    int vertex = -1;
+    int texcoord = -1;
+};
+
+ObjFaceRef parseObjFaceRef(const std::string& token, std::size_t vertexCount, std::size_t texCoordCount) {
+    ObjFaceRef ref;
+    const auto firstSlash = token.find('/');
+    if (firstSlash == std::string::npos) {
+        ref.vertex = parseObjComponentIndex(token, vertexCount);
+        return ref;
+    }
+
+    ref.vertex = parseObjComponentIndex(token.substr(0, firstSlash), vertexCount);
+    const auto secondSlash = token.find('/', firstSlash + 1);
+    if (secondSlash == std::string::npos) {
+        ref.texcoord = parseObjComponentIndex(token.substr(firstSlash + 1), texCoordCount);
+    } else if (secondSlash > firstSlash + 1) {
+        ref.texcoord = parseObjComponentIndex(token.substr(firstSlash + 1, secondSlash - firstSlash - 1), texCoordCount);
+    }
+    return ref;
+}
+
+bool loadTexturedObjAsset(const std::vector<of::filesystem::path>& objCandidatePaths,
+                         const std::string& logLabel,
+                         ofVboMesh& mesh,
+                         ofImage& texture,
+                         bool& textureLoaded,
+                         glm::vec3& modelMin,
+                         glm::vec3& modelMax,
+                         float& modelHeight,
+                         float& modelDepth) {
+    mesh.clear();
+    mesh.setMode(OF_PRIMITIVE_TRIANGLES);
+    texture.clear();
+    textureLoaded = false;
+    modelMin = glm::vec3(std::numeric_limits<float>::max());
+    modelMax = glm::vec3(std::numeric_limits<float>::lowest());
+    modelHeight = 1.0f;
+    modelDepth = 1.0f;
+
+    std::string objPath;
+    for (const auto& candidate : objCandidatePaths) {
+        if (ofFile::doesFileExist(candidate)) {
+            objPath = candidate.string();
+            break;
+        }
+    }
+
+    if (objPath.empty()) return false;
+
+    ofBuffer buffer = ofBufferFromFile(objPath);
+    std::vector<glm::vec3> vertices;
+    std::vector<glm::vec2> texCoords;
+    std::vector<std::array<ObjFaceRef, 3>> triangles;
+    std::string mtllibName;
+    vertices.reserve(250000);
+    texCoords.reserve(250000);
+    triangles.reserve(250000);
+
+    for (const auto& rawLine : buffer.getLines()) {
+        if (rawLine.size() < 2) continue;
+
+        if (rawLine.rfind("mtllib ", 0) == 0) {
+            mtllibName = rawLine.substr(7);
+            continue;
+        }
+
+        if (rawLine.rfind("v ", 0) == 0) {
+            std::istringstream iss(rawLine.substr(2));
+            glm::vec3 v;
+            if (!(iss >> v.x >> v.y >> v.z)) continue;
+            vertices.push_back(v);
+            modelMin = glm::min(modelMin, v);
+            modelMax = glm::max(modelMax, v);
+            continue;
+        }
+
+        if (rawLine.rfind("vt ", 0) == 0) {
+            std::istringstream iss(rawLine.substr(3));
+            glm::vec2 vt;
+            if (!(iss >> vt.x >> vt.y)) continue;
+            texCoords.push_back(vt);
+            continue;
+        }
+
+        if (rawLine.rfind("f ", 0) == 0) {
+            std::istringstream iss(rawLine.substr(2));
+            std::vector<ObjFaceRef> face;
+            std::string token;
+            while (iss >> token) {
+                try {
+                    const ObjFaceRef ref = parseObjFaceRef(token, vertices.size(), texCoords.size());
+                    if (ref.vertex >= 0 && static_cast<std::size_t>(ref.vertex) < vertices.size()) {
+                        face.push_back(ref);
+                    }
+                } catch (...) {
+                }
+            }
+
+            if (face.size() < 3) continue;
+            for (std::size_t i = 1; i + 1 < face.size(); ++i) {
+                triangles.push_back({face[0], face[i], face[i + 1]});
+            }
+        }
+    }
+
+    std::filesystem::path texturePath;
+    if (!mtllibName.empty()) {
+        const std::filesystem::path objFilePath(objPath);
+        const std::filesystem::path mtlPath = objFilePath.parent_path() / mtllibName;
+        if (ofFile::doesFileExist(mtlPath)) {
+            ofBuffer mtlBuffer = ofBufferFromFile(mtlPath.string());
+            for (const auto& rawLine : mtlBuffer.getLines()) {
+                if (rawLine.rfind("map_Kd ", 0) == 0) {
+                    texturePath = mtlPath.parent_path() / rawLine.substr(7);
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!texturePath.empty() && ofFile::doesFileExist(texturePath)) {
+        textureLoaded = texture.load(texturePath.string());
+        if (textureLoaded) {
+            texture.getTexture().setTextureMinMagFilter(GL_LINEAR, GL_LINEAR);
+        }
+    }
+
+    if (!triangles.empty() && !vertices.empty()) {
+        for (const auto& tri : triangles) {
+            for (const auto& ref : tri) {
+                mesh.addVertex(vertices[ref.vertex]);
+                if (textureLoaded && ref.texcoord >= 0 && static_cast<std::size_t>(ref.texcoord) < texCoords.size()) {
+                    const glm::vec2 uv = texCoords[ref.texcoord];
+                    mesh.addTexCoord(glm::vec2(
+                        uv.x * static_cast<float>(texture.getWidth()),
+                        (1.0f - uv.y) * static_cast<float>(texture.getHeight())
+                    ));
+                }
+            }
+        }
+    }
+
+    if (mesh.getNumVertices() > 0 && !vertices.empty()) {
+        mesh.setUsage(GL_STATIC_DRAW);
+        modelHeight = std::max(0.001f, modelMax.y - modelMin.y);
+        modelDepth = std::max(0.001f, modelMax.z - modelMin.z);
+        ofLogNotice("ofApp") << "Loaded " << logLabel << " OBJ: " << objPath
+                             << " verts=" << mesh.getNumVertices()
+                             << " textured=" << (textureLoaded ? "yes" : "no")
+                             << " boundsMin=" << modelMin
+                             << " boundsMax=" << modelMax;
+        return true;
+    }
+
+    return false;
 }
 
 glm::vec2 randomWorldPointInCircle(float allowedRadius) {
@@ -276,7 +456,7 @@ void ofApp::applyMidiTakeover(float dt) {
         if (!midiTakeoverSeen[xAxis] || !midiTakeoverSeen[yAxis]) continue;
 
         auto& s = shapes[i];
-        const float worldRadius = ofMap(s.radius, 18.0f, 48.0f, 3.8f, 12.5f, true);
+        const float worldRadius = shapeWorldCollisionRadius(s);
         const float allowed = std::max(1.0f, kHemisphereRadius - worldRadius);
         const glm::vec2 currentWorld = screenToWorldPoint(s.pos, frameW, frameH);
 
@@ -356,11 +536,22 @@ void ofApp::getRainProjectionExtents(float& alongDirHalfExtent, float& alongTang
     alongTangentHalfExtent = std::abs(t.x) * halfW + std::abs(t.y) * halfH;
 }
 
+namespace {
+constexpr const char* kSenderSnapshotPath = "/tmp/ndi-test-sender-3d-snapshot.png";
+}
+
 void ofApp::setup() {
-    ofSetFrameRate(40);
+    ofSetFrameRate(30);
     ofBackground(16);
 
-    fbo.allocate(frameW, frameH, GL_RGBA);
+    ofFbo::Settings fboSettings;
+    fboSettings.width = frameW;
+    fboSettings.height = frameH;
+    fboSettings.internalformat = GL_RGBA;
+    fboSettings.useDepth = true;
+    fboSettings.depthStencilAsTexture = false;
+    fboSettings.textureTarget = GL_TEXTURE_2D;
+    fbo.allocate(fboSettings);
     fbo.begin();
     ofClear(0, 0, 0, 255);
     fbo.end();
@@ -370,13 +561,18 @@ void ofApp::setup() {
     } else {
         ndiVideo.setup(ndiSender);
         ndiVideo.setAsync(true);
+        ndiVideo.setFrameRate(static_cast<int>(ndiSendTargetFps), 1);
         ofLogNotice("ofApp") << "NDI sender ready: " << streamName;
     }
 
     initShapes();
+    loadCatModel();
+    loadPersonModel();
+    loadCarModel();
     applyPeriodicBlinkControls();
     loadPresetFile();
     setupMidiInput();
+    startupSnapshotSaved = false;
 }
 
 void ofApp::applyPeriodicBlinkControls() {
@@ -397,7 +593,6 @@ float ofApp::randomHoldDuration(bool onState) const {
     const float lambda = std::max(0.02f, onState ? switchRate * (1.0f - duty) : switchRate * duty);
     const float u = std::max(0.0001f, ofRandomuf());
     float sample = -std::log(1.0f - u) / lambda;
-    // Bias toward longer ON windows and shorter OFF gaps (for musical continuity).
     if (onState) {
         sample *= 3.0f;
         return ofClamp(sample, 0.8f, 14.0f);
@@ -408,6 +603,127 @@ float ofApp::randomHoldDuration(bool onState) const {
 
 std::string ofApp::objectPresetName() const {
     return objectPresetLabel(objectPreset);
+}
+
+void ofApp::loadCatModel() {
+    catObjLoaded = false;
+    catObjTextureLoaded = false;
+    catModelLoaded = false;
+    catModelMeshes.clear();
+
+    const auto exeDir = ofFilePath::getCurrentExeDir();
+    const std::vector<of::filesystem::path> objCandidatePaths = {
+        ofToDataPath("models/Meshy_AI_standing_cat_0328230256_texture_obj/Meshy_AI_standing_cat_0328230256_texture.obj", true),
+        ofToDataPath("models/Meshy_AI_Sitting_orange_tabby__0328134407_texture_obj/Meshy_AI_Sitting_orange_tabby__0328134407_texture.obj", true),
+        ofToDataPath("catsit.obj", true),
+        ofToDataPath("cat.obj", true),
+        ofToDataPath("models/catsit.obj", true),
+        ofToDataPath("models/cat.obj", true),
+        ofFilePath::join(exeDir, "../Resources/data/models/Meshy_AI_standing_cat_0328230256_texture_obj/Meshy_AI_standing_cat_0328230256_texture.obj"),
+        ofFilePath::join(exeDir, "../Resources/data/models/Meshy_AI_Sitting_orange_tabby__0328134407_texture_obj/Meshy_AI_Sitting_orange_tabby__0328134407_texture.obj"),
+        ofFilePath::join(exeDir, "../Resources/data/catsit.obj"),
+        ofFilePath::join(exeDir, "../Resources/data/cat.obj"),
+        ofFilePath::join(exeDir, "../Resources/data/models/catsit.obj"),
+        ofFilePath::join(exeDir, "../Resources/data/models/cat.obj"),
+        ofFilePath::join(exeDir, "../../../data/models/Meshy_AI_standing_cat_0328230256_texture_obj/Meshy_AI_standing_cat_0328230256_texture.obj"),
+        ofFilePath::join(exeDir, "../../../data/models/Meshy_AI_Sitting_orange_tabby__0328134407_texture_obj/Meshy_AI_Sitting_orange_tabby__0328134407_texture.obj"),
+        ofFilePath::join(exeDir, "../../../data/catsit.obj"),
+        ofFilePath::join(exeDir, "../../../data/cat.obj"),
+        ofFilePath::join(exeDir, "../../../data/models/catsit.obj"),
+        ofFilePath::join(exeDir, "../../../data/models/cat.obj"),
+    };
+
+    catObjLoaded = loadTexturedObjAsset(objCandidatePaths, "cat", catObjMesh, catObjTexture, catObjTextureLoaded,
+                                        catModelMin, catModelMax, catModelHeight, catModelDepth);
+    if (catObjLoaded) return;
+
+    catModelMin = glm::vec3(0.0f);
+    catModelMax = glm::vec3(0.0f);
+    const std::vector<of::filesystem::path> glbCandidatePaths = {
+        ofToDataPath("catsit.glb", true),
+        ofToDataPath("cat.glb", true),
+        ofToDataPath("models/catsit.glb", true),
+        ofToDataPath("models/cat.glb", true),
+        ofFilePath::join(exeDir, "../Resources/data/catsit.glb"),
+        ofFilePath::join(exeDir, "../Resources/data/cat.glb"),
+        ofFilePath::join(exeDir, "../Resources/data/models/catsit.glb"),
+        ofFilePath::join(exeDir, "../Resources/data/models/cat.glb"),
+        ofFilePath::join(exeDir, "../../../data/catsit.glb"),
+        ofFilePath::join(exeDir, "../../../data/cat.glb"),
+        ofFilePath::join(exeDir, "../../../data/models/catsit.glb"),
+        ofFilePath::join(exeDir, "../../../data/models/cat.glb"),
+    };
+
+    of::filesystem::path catPath;
+    for (const auto& candidate : glbCandidatePaths) {
+        if (ofFile::doesFileExist(candidate)) {
+            catPath = candidate;
+            break;
+        }
+    }
+
+    if (catPath.empty()) {
+        std::ostringstream oss;
+        oss << "Cat model not found. Tried OBJ and GLB paths.";
+        ofLogWarning("ofApp") << oss.str();
+        return;
+    }
+
+    catModel.setScaleNormalization(false);
+    if (!catModel.load(catPath, ofxAssimpModelLoader::OPTIMIZE_DEFAULT)) {
+        ofLogError("ofApp") << "Failed to load cat model: " << catPath;
+        return;
+    }
+
+    catModelLoaded = true;
+    catModelMeshes.clear();
+    for (int i = 0; i < catModel.getNumMeshes(); ++i) {
+        catModelMeshes.push_back(catModel.getMesh(i));
+    }
+
+    if (catModelMeshes.empty()) {
+        catModelLoaded = false;
+        ofLogError("ofApp") << "Cat model loaded but contained no meshes: " << catPath;
+        return;
+    }
+
+    catModelMin = glm::vec3(std::numeric_limits<float>::max());
+    catModelMax = glm::vec3(std::numeric_limits<float>::lowest());
+    for (const auto& mesh : catModelMeshes) {
+        for (const auto& v : mesh.getVertices()) {
+            catModelMin = glm::min(catModelMin, v);
+            catModelMax = glm::max(catModelMax, v);
+        }
+    }
+    catModelHeight = std::max(0.001f, catModelMax.y - catModelMin.y);
+    catModelDepth = std::max(0.001f, catModelMax.z - catModelMin.z);
+}
+
+void ofApp::loadPersonModel() {
+    personObjLoaded = false;
+    personObjTextureLoaded = false;
+    const auto exeDir = ofFilePath::getCurrentExeDir();
+    const std::vector<of::filesystem::path> objCandidatePaths = {
+        ofToDataPath("models/MAn Meshy_AI_Open_Arms_0328134507_texture_obj/Meshy_AI_Open_Arms_0328134507_texture.obj", true),
+        ofFilePath::join(exeDir, "../Resources/data/models/MAn Meshy_AI_Open_Arms_0328134507_texture_obj/Meshy_AI_Open_Arms_0328134507_texture.obj"),
+        ofFilePath::join(exeDir, "../../../data/models/MAn Meshy_AI_Open_Arms_0328134507_texture_obj/Meshy_AI_Open_Arms_0328134507_texture.obj"),
+    };
+    personObjLoaded = loadTexturedObjAsset(objCandidatePaths, "person", personObjMesh, personObjTexture,
+                                           personObjTextureLoaded, personModelMin, personModelMax,
+                                           personModelHeight, personModelDepth);
+}
+
+void ofApp::loadCarModel() {
+    carObjLoaded = false;
+    carObjTextureLoaded = false;
+    const auto exeDir = ofFilePath::getCurrentExeDir();
+    const std::vector<of::filesystem::path> objCandidatePaths = {
+        ofToDataPath("models/Car Meshy_AI_Crimson_Velocity_0328135326_texture_obj/Meshy_AI_Crimson_Velocity_0328135326_texture.obj", true),
+        ofFilePath::join(exeDir, "../Resources/data/models/Car Meshy_AI_Crimson_Velocity_0328135326_texture_obj/Meshy_AI_Crimson_Velocity_0328135326_texture.obj"),
+        ofFilePath::join(exeDir, "../../../data/models/Car Meshy_AI_Crimson_Velocity_0328135326_texture_obj/Meshy_AI_Crimson_Velocity_0328135326_texture.obj"),
+    };
+    carObjLoaded = loadTexturedObjAsset(objCandidatePaths, "car", carObjMesh, carObjTexture, carObjTextureLoaded,
+                                        carModelMin, carModelMax, carModelHeight, carModelDepth);
 }
 
 void ofApp::assignObjectPreset() {
@@ -431,6 +747,10 @@ glm::vec3 ofApp::shapeWorldPoint(const MovingShape& s) const {
             baseHeight = 4.0f;
             extraHeight = ofLerp(0.0f, 10.0f, 1.0f - s.depth);
             break;
+        case ObjectKind::Cat:
+            baseHeight = 0.0f;
+            extraHeight = ofLerp(0.0f, 1.8f, 1.0f - s.depth);
+            break;
         case ObjectKind::Dog:
             baseHeight = 0.0f;
             extraHeight = ofLerp(0.0f, 1.5f, 1.0f - s.depth);
@@ -439,17 +759,68 @@ glm::vec3 ofApp::shapeWorldPoint(const MovingShape& s) const {
             baseHeight = 0.0f;
             extraHeight = ofLerp(0.0f, 6.0f, 1.0f - s.depth);
             break;
-        case ObjectKind::Square:
+        case ObjectKind::Car:
             baseHeight = 0.0f;
-            extraHeight = ofLerp(0.0f, 8.0f, 1.0f - s.depth);
-            break;
-        case ObjectKind::Star:
-            baseHeight = 8.0f;
-            extraHeight = ofLerp(2.0f, 18.0f, 1.0f - s.depth);
+            extraHeight = ofLerp(0.0f, 1.0f, 1.0f - s.depth);
             break;
     }
 
     return glm::vec3(worldX, worldY, baseHeight + extraHeight);
+}
+
+float ofApp::shapeWorldCollisionRadius(const MovingShape& shape) const {
+    const float genericRadius = ofMap(shape.radius, 18.0f, 48.0f, 3.8f, 12.5f, true);
+    auto contactRadius = [](float width, float depth) {
+        const float major = std::max(width, depth);
+        const float minor = std::min(width, depth);
+        return std::max(1.5f, major * 0.45f + minor * 0.10f);
+    };
+
+    switch (shape.objectKind) {
+        case ObjectKind::Person:
+            if (personObjLoaded) {
+                const float scale = 0.5f * ofMap(shape.radius, 18.0f, 48.0f, 18.0f, 28.0f, true);
+                const float width = std::max(0.001f, personModelMax.x - personModelMin.x) * scale;
+                const float depth = std::max(0.001f, personModelDepth) * scale;
+                return contactRadius(width, depth);
+            }
+            break;
+        case ObjectKind::Cat:
+            if (catObjLoaded || (catModelLoaded && !catModelMeshes.empty())) {
+                const float catL = ofMap(shape.radius, 18.0f, 48.0f, 18.0f, 28.0f, true);
+                const float scale = 0.5f * ((catL * 0.95f) / std::max(0.001f, catModelHeight));
+                const float width = std::max(0.001f, catModelMax.x - catModelMin.x) * scale;
+                const float depth = std::max(0.001f, catModelDepth) * scale;
+                return contactRadius(width, depth);
+            }
+            break;
+        case ObjectKind::Car:
+            if (carObjLoaded) {
+                const float scale = 0.5f * ofMap(shape.radius, 18.0f, 48.0f, 18.0f, 28.0f, true);
+                const float width = std::max(0.001f, carModelMax.x - carModelMin.x) * scale;
+                const float depth = std::max(0.001f, carModelDepth) * scale;
+                return contactRadius(width, depth);
+            }
+            break;
+        default:
+            break;
+    }
+
+    return genericRadius;
+}
+
+glm::vec2 ofApp::velocityScreenToWorld(const glm::vec2& screenVel) const {
+    return glm::vec2(
+        screenVel.x * ((2.0f * kWorldSide) / static_cast<float>(frameW)),
+        screenVel.y * ((kWorldNearY - kWorldFarY) / static_cast<float>(frameH))
+    );
+}
+
+glm::vec2 ofApp::velocityWorldToScreen(const glm::vec2& worldVel) const {
+    return glm::vec2(
+        worldVel.x * (static_cast<float>(frameW) / (2.0f * kWorldSide)),
+        worldVel.y * (static_cast<float>(frameH) / (kWorldNearY - kWorldFarY))
+    );
 }
 
 glm::vec3 ofApp::cameraTargetWorld() const {
@@ -532,16 +903,6 @@ float ofApp::projectRadius(const MovingShape& s) const {
     return std::max(3.5f, baseRadius * radialScale);
 }
 
-void ofApp::drawStarGlyph(const glm::vec2& p, float size, int points) const {
-    ofBeginShape();
-    for (int i = 0; i < points * 2; ++i) {
-        const float angle = glm::pi<float>() * static_cast<float>(i) / static_cast<float>(points) - glm::half_pi<float>();
-        const float r = (i % 2 == 0) ? size : size * 0.46f;
-        ofVertex(p.x + std::cos(angle) * r, p.y + std::sin(angle) * r);
-    }
-    ofEndShape(true);
-}
-
 void ofApp::drawPersonGlyph(const glm::vec2& p, float size) const {
     const float headR = size * 0.22f;
     ofDrawCircle(p.x, p.y - size * 0.62f, headR);
@@ -567,6 +928,37 @@ void ofApp::drawHandGlyph(const glm::vec2& p, float size) const {
     ofPopMatrix();
 }
 
+void ofApp::drawCatGlyph(const glm::vec2& p, float size, float yawDeg) const {
+    ofPushMatrix();
+    ofTranslate(p);
+    ofRotateDeg(yawDeg * 0.12f);
+
+    const float bodyW = size * 1.10f;
+    const float bodyH = size * 0.48f;
+    const float headR = size * 0.20f;
+    const float legTop = size * 0.10f;
+    const float legBottom = size * 0.58f;
+
+    ofDrawEllipse(0.0f, 0.0f, bodyW, bodyH);
+    ofDrawCircle(size * 0.46f, -size * 0.15f, headR);
+    ofDrawTriangle(size * 0.34f, -size * 0.28f, size * 0.42f, -size * 0.52f, size * 0.22f, -size * 0.34f);
+    ofDrawTriangle(size * 0.54f, -size * 0.26f, size * 0.66f, -size * 0.48f, size * 0.44f, -size * 0.32f);
+
+    ofSetLineWidth(std::max(2.0f, size * 0.06f));
+    for (float lx : {-0.26f, -0.06f, 0.12f, 0.28f}) {
+        ofDrawLine(size * lx, legTop, size * lx, legBottom);
+    }
+
+    ofDrawLine(-size * 0.46f, -size * 0.04f, -size * 0.70f, -size * 0.26f);
+    ofDrawLine(-size * 0.70f, -size * 0.26f, -size * 0.82f, -size * 0.48f);
+
+    const glm::vec2 nose(size * 0.66f, -size * 0.12f);
+    ofDrawLine(nose.x - size * 0.02f, nose.y, nose.x + size * 0.10f, nose.y - size * 0.01f);
+    ofDrawLine(nose.x - size * 0.02f, nose.y + size * 0.04f, nose.x + size * 0.12f, nose.y + size * 0.08f);
+    ofDrawLine(nose.x - size * 0.02f, nose.y - size * 0.04f, nose.x + size * 0.12f, nose.y - size * 0.10f);
+    ofPopMatrix();
+}
+
 void ofApp::drawDogGlyph(const glm::vec2& p, float size, float yawDeg) const {
     ofPushMatrix();
     ofTranslate(p);
@@ -586,16 +978,22 @@ void ofApp::drawDogGlyph(const glm::vec2& p, float size, float yawDeg) const {
 void ofApp::drawPlainObjectGlyph(const glm::vec2& p, float size, float yawDeg) const {
     ofPushMatrix();
     ofTranslate(p);
-    ofRotateDeg(yawDeg * 0.15f);
-    ofDrawRectRounded(-size * 0.48f, -size * 0.34f, size * 0.96f, size * 0.68f, size * 0.12f);
+    ofRotateDeg(yawDeg * 0.18f);
+    const glm::vec2 offset(size * 0.16f, -size * 0.14f);
+    ofDrawRectangle(-size * 0.42f, -size * 0.42f, size * 0.84f, size * 0.84f);
     ofNoFill();
     ofSetLineWidth(std::max(2.0f, size * 0.05f));
-    ofDrawRectangle(-size * 0.30f, -size * 0.18f, size * 0.60f, size * 0.36f);
+    ofDrawRectangle(-size * 0.42f, -size * 0.42f, size * 0.84f, size * 0.84f);
+    ofDrawRectangle(-size * 0.42f + offset.x, -size * 0.42f + offset.y, size * 0.84f, size * 0.84f);
+    ofDrawLine(-size * 0.42f, -size * 0.42f, -size * 0.42f + offset.x, -size * 0.42f + offset.y);
+    ofDrawLine(size * 0.42f, -size * 0.42f, size * 0.42f + offset.x, -size * 0.42f + offset.y);
+    ofDrawLine(-size * 0.42f, size * 0.42f, -size * 0.42f + offset.x, size * 0.42f + offset.y);
+    ofDrawLine(size * 0.42f, size * 0.42f, size * 0.42f + offset.x, size * 0.42f + offset.y);
     ofFill();
     ofPopMatrix();
 }
 
-void ofApp::drawShape3D(const MovingShape& s, int idx) const {
+void ofApp::drawShape3D(const MovingShape& s, int idx) {
     const glm::vec3 worldPoint = shapeWorldPoint(s);
     glm::vec2 p;
     if (!projectWorldPoint(worldPoint, p, nullptr)) return;
@@ -624,11 +1022,46 @@ void ofApp::drawShape3D(const MovingShape& s, int idx) const {
         }
     };
 
-    auto drawProjectedCircle = [&](const glm::vec3& c3, float worldR) {
+    auto projectedPixelRadius = [&](const glm::vec3& c3, float worldR) {
         glm::vec2 c2, r2;
         if (projectWorldPoint(c3, c2, nullptr) && projectWorldPoint(c3 + glm::vec3(worldR, 0.0f, 0.0f), r2, nullptr)) {
-            ofDrawCircle(c2, std::max(2.0f, glm::distance(c2, r2)));
+            return std::max(2.0f, glm::distance(c2, r2));
         }
+        if (projectWorldPoint(c3, c2, nullptr) && projectWorldPoint(c3 + glm::vec3(0.0f, 0.0f, worldR), r2, nullptr)) {
+            return std::max(2.0f, glm::distance(c2, r2));
+        }
+        return 2.0f;
+    };
+
+    auto drawProjectedCircle = [&](const glm::vec3& c3, float worldR) {
+        glm::vec2 c2;
+        if (projectWorldPoint(c3, c2, nullptr)) {
+            ofDrawCircle(c2, projectedPixelRadius(c3, worldR));
+        }
+    };
+
+    auto drawProjectedTube = [&](const glm::vec3& a3, const glm::vec3& b3, float worldR, const ofColor& fillCol) {
+        glm::vec2 a2, b2;
+        if (!projectWorldPoint(a3, a2, nullptr) || !projectWorldPoint(b3, b2, nullptr)) return;
+        glm::vec2 axis = b2 - a2;
+        const float len = glm::length(axis);
+        if (len < 0.001f) {
+            ofSetColor(fillCol);
+            ofDrawCircle(a2, projectedPixelRadius(a3, worldR));
+            return;
+        }
+        glm::vec2 perp(-axis.y / len, axis.x / len);
+        const float ra = projectedPixelRadius(a3, worldR);
+        const float rb = projectedPixelRadius(b3, worldR);
+        ofSetColor(fillCol);
+        ofBeginShape();
+        ofVertex(a2 + perp * ra);
+        ofVertex(b2 + perp * rb);
+        ofVertex(b2 - perp * rb);
+        ofVertex(a2 - perp * ra);
+        ofEndShape(true);
+        ofDrawCircle(a2, ra);
+        ofDrawCircle(b2, rb);
     };
 
     auto drawProjectedLoop = [&](const std::vector<glm::vec3>& pts, bool closed) {
@@ -646,33 +1079,71 @@ void ofApp::drawShape3D(const MovingShape& s, int idx) const {
             if (!projectWorldPoint(p3, p2, nullptr)) return;
             screenPts.push_back(p2);
         }
+        glm::vec2 centroid(0.0f, 0.0f);
+        for (const auto& p2 : screenPts) centroid += p2;
+        centroid /= static_cast<float>(screenPts.size());
+
+        ofMesh mesh;
+        mesh.setMode(OF_PRIMITIVE_TRIANGLES);
+        mesh.addVertex(glm::vec3(centroid.x, centroid.y, 0.0f));
+        for (const auto& p2 : screenPts) {
+            mesh.addVertex(glm::vec3(p2.x, p2.y, 0.0f));
+        }
+        for (size_t i = 0; i < screenPts.size(); ++i) {
+            const ofIndexType a = 0;
+            const ofIndexType b = static_cast<ofIndexType>(i + 1);
+            const ofIndexType c = static_cast<ofIndexType>(((i + 1) % screenPts.size()) + 1);
+            mesh.addIndex(a);
+            mesh.addIndex(b);
+            mesh.addIndex(c);
+        }
         ofSetColor(col);
-        ofBeginShape();
-        for (const auto& p2 : screenPts) ofVertex(p2.x, p2.y);
-        ofEndShape(true);
+        mesh.draw();
     };
 
-    auto drawProjectedBox = [&](const glm::vec3& center3, const glm::vec3& half) {
-        const glm::vec3 p000 = center3 + glm::vec3(-half.x, -half.y, -half.z);
-        const glm::vec3 p001 = center3 + glm::vec3(-half.x, -half.y,  half.z);
-        const glm::vec3 p010 = center3 + glm::vec3(-half.x,  half.y, -half.z);
-        const glm::vec3 p011 = center3 + glm::vec3(-half.x,  half.y,  half.z);
-        const glm::vec3 p100 = center3 + glm::vec3( half.x, -half.y, -half.z);
-        const glm::vec3 p101 = center3 + glm::vec3( half.x, -half.y,  half.z);
-        const glm::vec3 p110 = center3 + glm::vec3( half.x,  half.y, -half.z);
-        const glm::vec3 p111 = center3 + glm::vec3( half.x,  half.y,  half.z);
-        drawProjectedFill({p001, p101, p111, p011}, ofColor(base.r, base.g, base.b, 56));
-        drawProjectedFill({p010, p110, p111, p011}, ofColor(base.r, base.g, base.b, 34));
-        drawProjectedLoop({p000, p100, p110, p010}, true);
-        drawProjectedLoop({p001, p101, p111, p011}, true);
-        drawProjectedLine(p000, p001);
-        drawProjectedLine(p100, p101);
-        drawProjectedLine(p110, p111);
-        drawProjectedLine(p010, p011);
+    auto drawProjectedPrism = [&](const std::vector<glm::vec2>& footprint, float z0, float z1, const ofColor& sideCol, const ofColor& topCol) {
+        if (footprint.size() < 3) return;
+        std::vector<glm::vec3> bottom;
+        std::vector<glm::vec3> top;
+        bottom.reserve(footprint.size());
+        top.reserve(footprint.size());
+        for (const auto& pt : footprint) {
+            bottom.emplace_back(pt.x, pt.y, z0);
+            top.emplace_back(pt.x, pt.y, z1);
+        }
+        drawProjectedFill(top, topCol);
+        for (size_t i = 0; i < footprint.size(); ++i) {
+            const size_t j = (i + 1) % footprint.size();
+            drawProjectedFill({bottom[i], bottom[j], top[j], top[i]}, sideCol);
+        }
+        drawProjectedLoop(bottom, true);
+        drawProjectedLoop(top, true);
+        for (size_t i = 0; i < footprint.size(); ++i) drawProjectedLine(bottom[i], top[i]);
+    };
+
+    auto makeOvalFootprint = [&](const glm::vec2& center2, float rx, float ry, int steps = 18) {
+        std::vector<glm::vec2> pts;
+        pts.reserve(steps);
+        for (int i = 0; i < steps; ++i) {
+            const float ang = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(steps);
+            pts.emplace_back(center2.x + std::cos(ang) * rx, center2.y + std::sin(ang) * ry);
+        }
+        return pts;
+    };
+
+    auto makeScaledFootprint = [&](const glm::vec2& center2, float sx, float sy, std::initializer_list<glm::vec2> unitPts) {
+        std::vector<glm::vec2> pts;
+        pts.reserve(unitPts.size());
+        for (const auto& pt : unitPts) {
+            pts.emplace_back(center2.x + pt.x * sx, center2.y + pt.y * sy);
+        }
+        return pts;
     };
 
     switch (s.objectKind) {
         case ObjectKind::Person: {
+            if (drawPersonModel3D(s)) break;
+
             const float personHeight = ofMap(s.radius, 18.0f, 48.0f, 12.0f, 26.0f, true);
             const float legHalf = personHeight * 0.10f;
             const float shoulderHalf = personHeight * 0.16f;
@@ -681,11 +1152,7 @@ void ofApp::drawShape3D(const MovingShape& s, int idx) const {
             const float hipZ = personHeight * 0.34f;
             const float headZ = personHeight * 0.88f;
             const float headR = personHeight * 0.11f;
-            const float torsoHalfW = personHeight * 0.10f;
-            const float torsoHalfD = personHeight * 0.06f;
             const float torsoHalfH = personHeight * 0.16f;
-            const float hipHalfW = personHeight * 0.12f;
-            const float hipHalfD = personHeight * 0.07f;
             const float hipHalfH = personHeight * 0.07f;
 
             const glm::vec3 pelvis(worldPoint.x, worldPoint.y, hipZ);
@@ -704,52 +1171,117 @@ void ofApp::drawShape3D(const MovingShape& s, int idx) const {
             const float fingerLen = personHeight * ofLerp(0.10f, 0.24f, handOpen);
             const float fingerSpread = personHeight * ofLerp(0.03f, 0.12f, handOpen);
 
+            const auto torsoFootprint = makeScaledFootprint(
+                glm::vec2(worldPoint.x, worldPoint.y),
+                personHeight * 0.34f,
+                personHeight * 0.28f,
+                {
+                    {-0.62f, 0.24f}, {-0.78f, 0.02f}, {-0.64f, -0.28f},
+                    {-0.24f, -0.58f}, {0.24f, -0.58f}, {0.64f, -0.28f},
+                    {0.78f, 0.02f}, {0.62f, 0.24f}, {0.30f, 0.42f}, {-0.30f, 0.42f}
+                }
+            );
+            const auto hipFootprint = makeScaledFootprint(
+                glm::vec2(worldPoint.x, worldPoint.y + personHeight * 0.03f),
+                personHeight * 0.28f,
+                personHeight * 0.18f,
+                {
+                    {-0.72f, 0.28f}, {-0.50f, -0.30f}, {0.50f, -0.30f}, {0.72f, 0.28f},
+                    {0.30f, 0.54f}, {-0.30f, 0.54f}
+                }
+            );
+            const auto leftShoe = makeScaledFootprint(
+                glm::vec2(leftFoot.x, leftFoot.y + personHeight * 0.02f),
+                personHeight * 0.09f,
+                personHeight * 0.16f,
+                {
+                    {-0.55f, 0.52f}, {0.20f, 0.52f}, {0.42f, 0.18f}, {0.40f, -0.40f},
+                    {-0.34f, -0.48f}, {-0.62f, -0.10f}
+                }
+            );
+            const auto rightShoe = makeScaledFootprint(
+                glm::vec2(rightFoot.x, rightFoot.y + personHeight * 0.02f),
+                personHeight * 0.09f,
+                personHeight * 0.16f,
+                {
+                    {-0.20f, 0.52f}, {0.55f, 0.52f}, {0.62f, -0.10f}, {0.34f, -0.48f},
+                    {-0.40f, -0.40f}, {-0.42f, 0.18f}
+                }
+            );
+
             auto drawHandFan = [&](const glm::vec3& hand, float side) {
-                drawProjectedCircle(hand, palmR);
+                const auto palm = makeScaledFootprint(
+                    glm::vec2(hand.x, hand.y),
+                    palmR * 1.9f,
+                    palmR * 2.8f,
+                    {
+                        {-0.62f, 0.75f}, {0.44f, 0.75f}, {0.56f, 0.18f}, {0.46f, -0.18f},
+                        {0.14f, -0.36f}, {-0.26f, -0.28f}, {-0.58f, 0.12f}
+                    }
+                );
+                drawProjectedPrism(
+                    palm,
+                    hand.z - palmR * 0.55f,
+                    hand.z + palmR * 0.25f,
+                    ofColor(base.r, base.g, base.b, 160),
+                    ofColor(base.r, base.g, base.b, 92)
+                );
                 for (int f = 0; f < 5; ++f) {
                     const float fan = static_cast<float>(f - 2);
-                    drawProjectedLine(
-                        hand,
+                    drawProjectedTube(
+                        glm::vec3(hand.x + side * palmR * 0.12f, hand.y - palmR * 0.25f, hand.z),
                         glm::vec3(
-                            hand.x + side * fingerSpread,
-                            hand.y - fingerSpread * fan * 0.35f,
+                            hand.x + side * (fingerSpread * 0.65f + std::abs(fan) * palmR * 0.08f),
+                            hand.y - palmR * 0.55f - fingerSpread * fan * 0.34f,
                             hand.z + fingerLen * (1.0f - std::abs(fan) * 0.08f)
-                        )
+                        ),
+                        palmR * 0.32f,
+                        ofColor(base.r, base.g, base.b, 220)
                     );
                 }
-                drawProjectedLine(
+                drawProjectedTube(
                     hand,
                     glm::vec3(
                         hand.x + side * fingerSpread * 0.7f,
                         hand.y + palmR * 1.8f,
                         hand.z + fingerLen * 0.35f
-                    )
+                    ),
+                    palmR * 0.28f,
+                    ofColor(base.r, base.g, base.b, 220)
                 );
             };
 
             ofSetLineWidth(std::max(2.0f, size * 0.08f));
-            drawProjectedBox(glm::vec3(worldPoint.x, worldPoint.y, shoulderZ - torsoHalfH * 0.2f),
-                             glm::vec3(torsoHalfW, torsoHalfD, torsoHalfH));
-            drawProjectedBox(glm::vec3(worldPoint.x, worldPoint.y, hipZ),
-                             glm::vec3(hipHalfW, hipHalfD, hipHalfH));
-            drawProjectedLine(leftFoot, leftHip);
-            drawProjectedLine(rightFoot, rightHip);
-            drawProjectedLine(leftHip, pelvis);
-            drawProjectedLine(rightHip, pelvis);
-            drawProjectedLine(pelvis, chest);
-            drawProjectedLine(leftShoulder, rightShoulder);
-            drawProjectedLine(leftShoulder, leftHand);
-            drawProjectedLine(rightShoulder, rightHand);
-            drawProjectedLine(chest, head);
-            drawProjectedBox(glm::vec3(leftFoot.x, leftFoot.y, personHeight * 0.03f),
-                             glm::vec3(personHeight * 0.04f, personHeight * 0.07f, personHeight * 0.03f));
-            drawProjectedBox(glm::vec3(rightFoot.x, rightFoot.y, personHeight * 0.03f),
-                             glm::vec3(personHeight * 0.04f, personHeight * 0.07f, personHeight * 0.03f));
-            drawProjectedCircle(leftFoot, personHeight * 0.03f);
-            drawProjectedCircle(rightFoot, personHeight * 0.03f);
+            drawProjectedPrism(torsoFootprint,
+                              shoulderZ - torsoHalfH * 1.15f,
+                              shoulderZ + torsoHalfH * 0.65f,
+                              ofColor(base.r, base.g, base.b, 148),
+                              ofColor(base.r, base.g, base.b, 84));
+            drawProjectedPrism(hipFootprint,
+                              hipZ - hipHalfH * 0.95f,
+                              hipZ + hipHalfH * 0.95f,
+                              ofColor(base.r, base.g, base.b, 152),
+                              ofColor(base.r, base.g, base.b, 88));
+            drawProjectedTube(leftFoot, leftHip, personHeight * 0.035f, ofColor(base.r, base.g, base.b, 210));
+            drawProjectedTube(rightFoot, rightHip, personHeight * 0.035f, ofColor(base.r, base.g, base.b, 210));
+            drawProjectedTube(leftHip, pelvis, personHeight * 0.032f, ofColor(base.r, base.g, base.b, 210));
+            drawProjectedTube(rightHip, pelvis, personHeight * 0.032f, ofColor(base.r, base.g, base.b, 210));
+            drawProjectedTube(pelvis, chest, personHeight * 0.040f, ofColor(base.r, base.g, base.b, 220));
+            drawProjectedTube(leftShoulder, rightShoulder, personHeight * 0.028f, ofColor(base.r, base.g, base.b, 210));
+            drawProjectedTube(leftShoulder, leftHand, personHeight * 0.026f, ofColor(base.r, base.g, base.b, 210));
+            drawProjectedTube(rightShoulder, rightHand, personHeight * 0.026f, ofColor(base.r, base.g, base.b, 210));
+            drawProjectedTube(chest, head, personHeight * 0.028f, ofColor(base.r, base.g, base.b, 220));
+            drawProjectedPrism(leftShoe, 0.0f, personHeight * 0.06f, ofColor(base.r, base.g, base.b, 150), ofColor(base.r, base.g, base.b, 94));
+            drawProjectedPrism(rightShoe, 0.0f, personHeight * 0.06f, ofColor(base.r, base.g, base.b, 150), ofColor(base.r, base.g, base.b, 94));
             drawProjectedCircle(leftShoulder, personHeight * 0.025f);
             drawProjectedCircle(rightShoulder, personHeight * 0.025f);
-            drawProjectedCircle(head, headR);
+            drawProjectedPrism(
+                makeOvalFootprint(glm::vec2(head.x, head.y), headR * 0.92f, headR * 1.06f),
+                head.z - headR * 0.84f,
+                head.z + headR * 0.84f,
+                ofColor(base.r, base.g, base.b, 152),
+                ofColor(base.r, base.g, base.b, 96)
+            );
             drawProjectedLine(glm::vec3(head.x - headR * 0.4f, head.y - headR * 0.85f, head.z + headR * 0.1f),
                               glm::vec3(head.x, head.y - headR * 1.25f, head.z + headR * 0.55f));
             drawProjectedLine(glm::vec3(head.x + headR * 0.4f, head.y - headR * 0.85f, head.z + headR * 0.1f),
@@ -760,34 +1292,34 @@ void ofApp::drawShape3D(const MovingShape& s, int idx) const {
         }
         case ObjectKind::Hand: {
             const float handH = ofMap(s.radius, 18.0f, 48.0f, 10.0f, 18.0f, true);
-            const float palmW = handH * 0.44f;
-            const float palmD = handH * 0.18f;
-            const float palmZ0 = handH * 0.20f;
-            const float palmZ1 = handH * 0.56f;
-            const float fingerY = worldPoint.y - handH * 0.18f;
-            const float fingerBaseZ = palmZ1;
-            const std::array<float,4> fingerX{{-0.18f, -0.06f, 0.06f, 0.18f}};
-            const std::array<float,4> fingerLen{{0.30f, 0.40f, 0.44f, 0.34f}};
-            const float knuckleY = worldPoint.y - handH * 0.08f;
-
-            drawProjectedBox(glm::vec3(worldPoint.x, worldPoint.y, (palmZ0 + palmZ1) * 0.5f),
-                             glm::vec3(palmW, palmD, (palmZ1 - palmZ0) * 0.5f));
-            ofSetColor(base);
-            drawProjectedLine(glm::vec3(worldPoint.x, worldPoint.y + palmD * 1.2f, palmZ0),
-                              glm::vec3(worldPoint.x, worldPoint.y, palmZ0 + handH * 0.04f));
-            for (size_t i = 0; i < fingerX.size(); ++i) {
-                const float x = worldPoint.x + handH * fingerX[i];
-                const float midZ = fingerBaseZ + handH * fingerLen[i] * 0.52f;
-                const float tipZ = fingerBaseZ + handH * fingerLen[i];
-                drawProjectedLine(glm::vec3(x, knuckleY, fingerBaseZ), glm::vec3(x, fingerY, midZ));
-                drawProjectedLine(glm::vec3(x, fingerY, midZ), glm::vec3(x, fingerY - handH * 0.02f, tipZ));
-                drawProjectedCircle(glm::vec3(x, knuckleY, fingerBaseZ), handH * 0.018f);
-                drawProjectedCircle(glm::vec3(x, fingerY, tipZ), handH * 0.03f);
-            }
-            drawProjectedLine(glm::vec3(worldPoint.x - palmW * 0.55f, worldPoint.y + palmD * 0.25f, palmZ0 + handH * 0.10f),
-                              glm::vec3(worldPoint.x - palmW * 1.10f, worldPoint.y - palmD * 0.55f, palmZ0 + handH * 0.30f));
-            drawProjectedLine(glm::vec3(worldPoint.x - palmW * 1.10f, worldPoint.y - palmD * 0.55f, palmZ0 + handH * 0.30f),
-                              glm::vec3(worldPoint.x - palmW * 1.30f, worldPoint.y - palmD * 0.90f, palmZ0 + handH * 0.42f));
+            const float open = 0.5f + 0.5f * std::sin(simTime * 1.8f + idx * 0.45f);
+            const float fingerReach = ofLerp(0.46f, 0.78f, open);
+            const float thumbSpread = ofLerp(0.16f, 0.34f, open);
+            const float thickness = handH * 0.26f;
+            const auto handOutline = makeScaledFootprint(
+                glm::vec2(worldPoint.x, worldPoint.y),
+                handH * 0.52f,
+                handH * 0.68f,
+                {
+                    {-0.42f, 0.72f}, {-0.16f, 0.80f}, {0.16f, 0.80f}, {0.34f, 0.62f},
+                    {0.36f, 0.24f}, {0.56f, 0.08f - thumbSpread}, {0.82f, -0.12f - thumbSpread},
+                    {0.44f, 0.18f}, {0.28f, 0.08f}, {0.23f, -fingerReach * 0.78f},
+                    {0.12f, -fingerReach}, {0.02f, -fingerReach * 1.06f}, {-0.08f, -fingerReach},
+                    {-0.18f, -fingerReach * 0.92f}, {-0.28f, -fingerReach * 0.74f},
+                    {-0.30f, 0.12f}, {-0.38f, 0.28f}, {-0.48f, 0.46f}
+                }
+            );
+            drawProjectedPrism(
+                handOutline,
+                worldPoint.z - thickness * 0.55f,
+                worldPoint.z + thickness * 0.55f,
+                ofColor(base.r, base.g, base.b, 160),
+                ofColor(base.r, base.g, base.b, 95)
+            );
+            drawProjectedCircle(glm::vec3(worldPoint.x + handH * 0.12f, worldPoint.y - handH * 0.38f, worldPoint.z + thickness * 0.35f), handH * 0.028f);
+            drawProjectedCircle(glm::vec3(worldPoint.x + handH * 0.04f, worldPoint.y - handH * 0.44f, worldPoint.z + thickness * 0.35f), handH * 0.026f);
+            drawProjectedCircle(glm::vec3(worldPoint.x - handH * 0.05f, worldPoint.y - handH * 0.42f, worldPoint.z + thickness * 0.35f), handH * 0.024f);
+            drawProjectedCircle(glm::vec3(worldPoint.x - handH * 0.14f, worldPoint.y - handH * 0.34f, worldPoint.z + thickness * 0.35f), handH * 0.022f);
             break;
         }
         case ObjectKind::Dog: {
@@ -795,83 +1327,393 @@ void ofApp::drawShape3D(const MovingShape& s, int idx) const {
             const float dogH = dogL * 0.42f;
             const float bodyFrontY = worldPoint.y - dogL * 0.18f;
             const float bodyBackY = worldPoint.y + dogL * 0.18f;
-            const float bodyZ = dogH * 0.75f;
+            const float bodyZ = dogH * 0.78f;
             const float legX = dogL * 0.16f;
-            const float headY = bodyFrontY - dogL * 0.18f;
+            const float headY = bodyFrontY - dogL * 0.16f;
             const float tailY = bodyBackY + dogL * 0.20f;
-            const float headZ = bodyZ * 1.03f;
-            const glm::vec3 bodyA(worldPoint.x, bodyBackY, bodyZ);
-            const glm::vec3 bodyB(worldPoint.x, bodyFrontY, bodyZ);
-            ofSetLineWidth(std::max(2.0f, size * 0.07f));
-            drawProjectedBox(glm::vec3(worldPoint.x, worldPoint.y, bodyZ * 0.72f),
-                             glm::vec3(dogL * 0.18f, dogL * 0.20f, dogH * 0.28f));
-            drawProjectedBox(glm::vec3(worldPoint.x, worldPoint.y + dogL * 0.02f, bodyZ * 0.92f),
-                             glm::vec3(dogL * 0.11f, dogL * 0.12f, dogH * 0.12f));
-            drawProjectedLine(bodyA, bodyB);
-            drawProjectedLine(glm::vec3(worldPoint.x - dogL * 0.18f, bodyBackY, bodyZ * 0.95f), glm::vec3(worldPoint.x + dogL * 0.18f, bodyBackY, bodyZ * 0.95f));
-            drawProjectedLine(glm::vec3(worldPoint.x - dogL * 0.20f, bodyFrontY, bodyZ * 0.95f), glm::vec3(worldPoint.x + dogL * 0.20f, bodyFrontY, bodyZ * 0.95f));
-            drawProjectedLine(glm::vec3(worldPoint.x - legX, bodyBackY, bodyZ * 0.8f), glm::vec3(worldPoint.x - legX, bodyBackY, 0.0f));
-            drawProjectedLine(glm::vec3(worldPoint.x + legX, bodyBackY, bodyZ * 0.8f), glm::vec3(worldPoint.x + legX, bodyBackY, 0.0f));
-            drawProjectedLine(glm::vec3(worldPoint.x - legX, bodyFrontY, bodyZ * 0.8f), glm::vec3(worldPoint.x - legX, bodyFrontY, 0.0f));
-            drawProjectedLine(glm::vec3(worldPoint.x + legX, bodyFrontY, bodyZ * 0.8f), glm::vec3(worldPoint.x + legX, bodyFrontY, 0.0f));
-            drawProjectedLine(glm::vec3(worldPoint.x, bodyFrontY, bodyZ), glm::vec3(worldPoint.x, headY, headZ));
-            drawProjectedBox(glm::vec3(worldPoint.x, headY, headZ), glm::vec3(dogL * 0.09f, dogL * 0.08f, dogH * 0.10f));
-            drawProjectedLine(glm::vec3(worldPoint.x, headY - dogL * 0.11f, headZ * 0.98f),
-                              glm::vec3(worldPoint.x, headY - dogL * 0.19f, headZ * 0.88f));
-            drawProjectedLine(glm::vec3(worldPoint.x - dogL * 0.04f, headY + dogL * 0.02f, headZ + dogH * 0.10f),
-                              glm::vec3(worldPoint.x - dogL * 0.08f, headY + dogL * 0.09f, headZ + dogH * 0.22f));
-            drawProjectedLine(glm::vec3(worldPoint.x + dogL * 0.04f, headY + dogL * 0.02f, headZ + dogH * 0.10f),
-                              glm::vec3(worldPoint.x + dogL * 0.08f, headY + dogL * 0.09f, headZ + dogH * 0.22f));
-            drawProjectedLine(glm::vec3(worldPoint.x, bodyBackY, bodyZ * 0.96f), glm::vec3(worldPoint.x, tailY, bodyZ * 1.08f));
+            const float headZ = bodyZ * 1.02f;
+            drawProjectedPrism(
+                makeScaledFootprint(
+                    glm::vec2(worldPoint.x, worldPoint.y),
+                    dogL * 0.28f,
+                    dogL * 0.36f,
+                    {
+                        {-0.52f, 0.46f}, {0.50f, 0.46f}, {0.66f, 0.18f}, {0.60f, -0.06f},
+                        {0.30f, -0.44f}, {-0.18f, -0.46f}, {-0.46f, -0.10f}, {-0.62f, 0.16f}
+                    }
+                ),
+                0.0f, bodyZ * 1.02f, ofColor(base.r, base.g, base.b, 145), ofColor(base.r, base.g, base.b, 72));
+            drawProjectedPrism(
+                makeScaledFootprint(
+                    glm::vec2(worldPoint.x, worldPoint.y + dogL * 0.01f),
+                    dogL * 0.20f,
+                    dogL * 0.22f,
+                    {
+                        {-0.48f, 0.42f}, {0.48f, 0.42f}, {0.56f, 0.08f}, {0.28f, -0.34f},
+                        {-0.26f, -0.34f}, {-0.56f, 0.10f}
+                    }
+                ),
+                bodyZ * 0.82f, bodyZ * 1.18f, ofColor(base.r, base.g, base.b, 145), ofColor(base.r, base.g, base.b, 82));
+            drawProjectedTube(glm::vec3(worldPoint.x - legX, bodyBackY, bodyZ * 0.78f), glm::vec3(worldPoint.x - legX, bodyBackY, 0.0f), dogL * 0.026f, ofColor(base.r, base.g, base.b, 220));
+            drawProjectedTube(glm::vec3(worldPoint.x + legX, bodyBackY, bodyZ * 0.78f), glm::vec3(worldPoint.x + legX, bodyBackY, 0.0f), dogL * 0.026f, ofColor(base.r, base.g, base.b, 220));
+            drawProjectedTube(glm::vec3(worldPoint.x - legX, bodyFrontY, bodyZ * 0.78f), glm::vec3(worldPoint.x - legX, bodyFrontY, 0.0f), dogL * 0.026f, ofColor(base.r, base.g, base.b, 220));
+            drawProjectedTube(glm::vec3(worldPoint.x + legX, bodyFrontY, bodyZ * 0.78f), glm::vec3(worldPoint.x + legX, bodyFrontY, 0.0f), dogL * 0.026f, ofColor(base.r, base.g, base.b, 220));
+            drawProjectedPrism(
+                makeScaledFootprint(
+                    glm::vec2(worldPoint.x, headY),
+                    dogL * 0.14f,
+                    dogL * 0.18f,
+                    {
+                        {-0.42f, 0.36f}, {0.42f, 0.36f}, {0.54f, 0.00f}, {0.36f, -0.32f},
+                        {-0.26f, -0.34f}, {-0.52f, -0.04f}
+                    }
+                ),
+                bodyZ * 0.78f, headZ * 1.10f, ofColor(base.r, base.g, base.b, 145), ofColor(base.r, base.g, base.b, 82));
+            drawProjectedPrism(
+                makeScaledFootprint(
+                    glm::vec2(worldPoint.x, headY - dogL * 0.14f),
+                    dogL * 0.05f,
+                    dogL * 0.10f,
+                    {
+                        {-0.48f, 0.24f}, {0.48f, 0.24f}, {0.34f, -0.62f}, {-0.34f, -0.62f}
+                    }
+                ),
+                headZ * 0.80f, headZ * 0.96f, ofColor(base.r, base.g, base.b, 150), ofColor(base.r, base.g, base.b, 90));
+            drawProjectedFill({glm::vec3(worldPoint.x - dogL * 0.04f, headY + dogL * 0.01f, headZ + dogH * 0.08f), glm::vec3(worldPoint.x - dogL * 0.10f, headY + dogL * 0.09f, headZ + dogH * 0.23f), glm::vec3(worldPoint.x - dogL * 0.01f, headY + dogL * 0.08f, headZ + dogH * 0.12f)}, ofColor(base.r, base.g, base.b, 190));
+            drawProjectedFill({glm::vec3(worldPoint.x + dogL * 0.04f, headY + dogL * 0.01f, headZ + dogH * 0.08f), glm::vec3(worldPoint.x + dogL * 0.10f, headY + dogL * 0.09f, headZ + dogH * 0.23f), glm::vec3(worldPoint.x + dogL * 0.01f, headY + dogL * 0.08f, headZ + dogH * 0.12f)}, ofColor(base.r, base.g, base.b, 190));
+            drawProjectedTube(glm::vec3(worldPoint.x, bodyBackY, bodyZ * 0.96f), glm::vec3(worldPoint.x, tailY, bodyZ * 1.08f), dogL * 0.014f, ofColor(base.r, base.g, base.b, 220));
             break;
         }
         case ObjectKind::PlainObject: {
-            const float bottleH = ofMap(s.radius, 18.0f, 48.0f, 14.0f, 24.0f, true);
-            const float bodyR = bottleH * 0.13f;
-            const float neckR = bottleH * 0.06f;
-            const float bodyZ = bottleH * 0.38f;
-            drawProjectedBox(glm::vec3(worldPoint.x, worldPoint.y, bodyZ),
-                             glm::vec3(bodyR, bodyR, bottleH * 0.30f));
-            drawProjectedBox(glm::vec3(worldPoint.x, worldPoint.y, bottleH * 0.78f),
-                             glm::vec3(neckR, neckR, bottleH * 0.12f));
-            drawProjectedCircle(glm::vec3(worldPoint.x, worldPoint.y, bottleH * 0.98f), neckR * 0.9f);
+            const float cubeH = ofMap(s.radius, 18.0f, 48.0f, 12.0f, 22.0f, true);
+            const float cubeHalf = cubeH * 0.24f;
+            const auto footprint = makeScaledFootprint(
+                glm::vec2(worldPoint.x, worldPoint.y),
+                cubeHalf,
+                cubeHalf,
+                {
+                    {-1.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 1.0f}
+                }
+            );
+            drawProjectedPrism(footprint, 0.0f, cubeH * 0.92f, ofColor(base.r, base.g, base.b, 150), ofColor(base.r, base.g, base.b, 78));
+            drawProjectedLine(glm::vec3(worldPoint.x - cubeHalf, worldPoint.y - cubeHalf, cubeH * 0.46f),
+                              glm::vec3(worldPoint.x + cubeHalf, worldPoint.y + cubeHalf, cubeH * 0.46f));
+            drawProjectedLine(glm::vec3(worldPoint.x - cubeHalf, worldPoint.y + cubeHalf, cubeH * 0.46f),
+                              glm::vec3(worldPoint.x + cubeHalf, worldPoint.y - cubeHalf, cubeH * 0.46f));
             break;
         }
-        case ObjectKind::Square: {
-            const float edge = ofMap(s.radius, 18.0f, 48.0f, 10.0f, 18.0f, true);
-            const glm::vec3 half(edge * 0.5f, edge * 0.5f, edge * 0.5f);
-            drawProjectedBox(glm::vec3(worldPoint.x, worldPoint.y, half.z), half);
-            drawProjectedLine(glm::vec3(worldPoint.x - half.x, worldPoint.y - half.y, half.z * 1.8f),
-                              glm::vec3(worldPoint.x + half.x, worldPoint.y + half.y, half.z * 0.2f));
-            drawProjectedLine(glm::vec3(worldPoint.x + half.x, worldPoint.y - half.y, half.z * 1.8f),
-                              glm::vec3(worldPoint.x - half.x, worldPoint.y + half.y, half.z * 0.2f));
+        case ObjectKind::Cat: {
+            if (drawCatModel3D(s)) break;
+
+            const float catL = ofMap(s.radius, 18.0f, 48.0f, 18.0f, 28.0f, true);
+            const float bodyRx = catL * 0.16f;
+            const float bodyRy = catL * 0.30f;
+            const float bodyTopZ = catL * 0.34f;
+            const float bodyBottomZ = bodyTopZ * 0.08f;
+            const float chestZ0 = bodyTopZ * 0.18f;
+            const float chestZ1 = bodyTopZ * 0.95f;
+            const float headY = worldPoint.y - bodyRy - catL * 0.10f;
+            const float headRx = catL * 0.10f;
+            const float headRy = catL * 0.12f;
+            const float headZ0 = bodyTopZ * 0.42f;
+            const float headZ1 = bodyTopZ * 1.18f;
+            const float muzzleY = headY - headRy * 0.72f;
+            const float muzzleZ0 = bodyTopZ * 0.55f;
+            const float muzzleZ1 = bodyTopZ * 0.82f;
+            const float legSpreadX = bodyRx * 0.72f;
+            const float frontLegY = worldPoint.y - bodyRy * 0.52f;
+            const float backLegY = worldPoint.y + bodyRy * 0.52f;
+            const float legTopZ = bodyTopZ * 0.78f;
+            const float legRadius = catL * 0.014f;
+            const float tailBaseY = worldPoint.y + bodyRy * 0.92f;
+            const float tailMidY = tailBaseY + catL * 0.18f;
+            const float tailTipY = tailMidY + catL * 0.14f;
+
+            drawProjectedPrism(
+                makeOvalFootprint(glm::vec2(worldPoint.x, worldPoint.y), bodyRx, bodyRy, 20),
+                bodyBottomZ,
+                bodyTopZ,
+                ofColor(base.r, base.g, base.b, 150),
+                ofColor(base.r, base.g, base.b, 86)
+            );
+            drawProjectedPrism(
+                makeOvalFootprint(glm::vec2(worldPoint.x, worldPoint.y - bodyRy * 0.18f), bodyRx * 0.78f, bodyRy * 0.34f, 16),
+                chestZ0,
+                chestZ1,
+                ofColor(base.r, base.g, base.b, 158),
+                ofColor(base.r, base.g, base.b, 96)
+            );
+            drawProjectedPrism(
+                makeOvalFootprint(glm::vec2(worldPoint.x, headY), headRx, headRy, 18),
+                headZ0,
+                headZ1,
+                ofColor(base.r, base.g, base.b, 154),
+                ofColor(base.r, base.g, base.b, 98)
+            );
+            drawProjectedPrism(
+                makeOvalFootprint(glm::vec2(worldPoint.x, muzzleY), headRx * 0.46f, headRy * 0.34f, 14),
+                muzzleZ0,
+                muzzleZ1,
+                ofColor(base.r, base.g, base.b, 166),
+                ofColor(base.r, base.g, base.b, 108)
+            );
+
+            drawProjectedTube(glm::vec3(worldPoint.x - legSpreadX, backLegY, legTopZ), glm::vec3(worldPoint.x - legSpreadX, backLegY, 0.0f), legRadius, ofColor(base.r, base.g, base.b, 220));
+            drawProjectedTube(glm::vec3(worldPoint.x + legSpreadX, backLegY, legTopZ), glm::vec3(worldPoint.x + legSpreadX, backLegY, 0.0f), legRadius, ofColor(base.r, base.g, base.b, 220));
+            drawProjectedTube(glm::vec3(worldPoint.x - legSpreadX, frontLegY, legTopZ), glm::vec3(worldPoint.x - legSpreadX, frontLegY, 0.0f), legRadius, ofColor(base.r, base.g, base.b, 220));
+            drawProjectedTube(glm::vec3(worldPoint.x + legSpreadX, frontLegY, legTopZ), glm::vec3(worldPoint.x + legSpreadX, frontLegY, 0.0f), legRadius, ofColor(base.r, base.g, base.b, 220));
+
+            drawProjectedFill(
+                {
+                    glm::vec3(worldPoint.x - headRx * 0.84f, headY - headRy * 0.10f, headZ1 - headRy * 0.04f),
+                    glm::vec3(worldPoint.x - headRx * 1.08f, headY - headRy * 0.64f, headZ1 + headRy * 0.54f),
+                    glm::vec3(worldPoint.x - headRx * 0.32f, headY - headRy * 0.56f, headZ1 + headRy * 0.18f)
+                },
+                ofColor(base.r, base.g, base.b, 196)
+            );
+            drawProjectedFill(
+                {
+                    glm::vec3(worldPoint.x + headRx * 0.84f, headY - headRy * 0.10f, headZ1 - headRy * 0.04f),
+                    glm::vec3(worldPoint.x + headRx * 1.08f, headY - headRy * 0.64f, headZ1 + headRy * 0.54f),
+                    glm::vec3(worldPoint.x + headRx * 0.32f, headY - headRy * 0.56f, headZ1 + headRy * 0.18f)
+                },
+                ofColor(base.r, base.g, base.b, 196)
+            );
+
+            drawProjectedTube(
+                glm::vec3(worldPoint.x, tailBaseY, bodyTopZ * 0.96f),
+                glm::vec3(worldPoint.x + catL * 0.06f, tailMidY, bodyTopZ * 1.22f),
+                catL * 0.010f,
+                ofColor(base.r, base.g, base.b, 220)
+            );
+            drawProjectedTube(
+                glm::vec3(worldPoint.x + catL * 0.06f, tailMidY, bodyTopZ * 1.22f),
+                glm::vec3(worldPoint.x + catL * 0.12f, tailTipY, bodyTopZ * 1.40f),
+                catL * 0.008f,
+                ofColor(base.r, base.g, base.b, 220)
+            );
             break;
         }
-        case ObjectKind::Star: {
-            const float outer = ofMap(s.radius, 18.0f, 48.0f, 8.0f, 14.0f, true);
-            const float inner = outer * 0.45f;
-            const float depth = outer * 0.18f;
-            std::vector<glm::vec3> front;
-            std::vector<glm::vec3> backFace;
-            front.reserve(10);
-            backFace.reserve(10);
-            for (int i = 0; i < 10; ++i) {
-                const float ang = glm::pi<float>() * static_cast<float>(i) / 5.0f - glm::half_pi<float>();
-                const float r = (i % 2 == 0) ? outer : inner;
-                const float x = worldPoint.x + std::cos(ang) * r;
-                const float z = outer + std::sin(ang) * r;
-                front.emplace_back(x, worldPoint.y - depth, z);
-                backFace.emplace_back(x, worldPoint.y + depth, z);
-            }
-            drawProjectedFill(front, ofColor(base.r, base.g, base.b, 70));
-            drawProjectedFill(backFace, ofColor(back.r, back.g, back.b, 50));
-            drawProjectedLoop(front, true);
-            drawProjectedLoop(backFace, true);
-            for (size_t i = 0; i < front.size(); ++i) drawProjectedLine(front[i], backFace[i]);
+        case ObjectKind::Car: {
+            if (drawCarModel3D(s)) break;
+
+            const float carL = ofMap(s.radius, 18.0f, 48.0f, 18.0f, 30.0f, true);
+            const float carW = carL * 0.22f;
+            const float bodyH = carL * 0.12f;
+            const float cabinH = carL * 0.10f;
+            const float wheelR = carL * 0.07f;
+            const std::vector<glm::vec2> body = {
+                {worldPoint.x - carW, worldPoint.y + carL * 0.22f},
+                {worldPoint.x + carW, worldPoint.y + carL * 0.22f},
+                {worldPoint.x + carW * 1.08f, worldPoint.y + carL * 0.06f},
+                {worldPoint.x + carW * 1.08f, worldPoint.y - carL * 0.14f},
+                {worldPoint.x + carW * 0.55f, worldPoint.y - carL * 0.24f},
+                {worldPoint.x - carW * 0.70f, worldPoint.y - carL * 0.24f},
+                {worldPoint.x - carW * 1.08f, worldPoint.y - carL * 0.10f},
+                {worldPoint.x - carW * 1.08f, worldPoint.y + carL * 0.10f}
+            };
+            const std::vector<glm::vec2> cabin = {
+                {worldPoint.x - carW * 0.55f, worldPoint.y + carL * 0.04f},
+                {worldPoint.x + carW * 0.18f, worldPoint.y + carL * 0.04f},
+                {worldPoint.x + carW * 0.50f, worldPoint.y - carL * 0.08f},
+                {worldPoint.x - carW * 0.35f, worldPoint.y - carL * 0.08f}
+            };
+            drawProjectedPrism(body, wheelR, wheelR + bodyH * 2.0f, ofColor(base.r, base.g, base.b, 150), ofColor(base.r, base.g, base.b, 80));
+            drawProjectedPrism(cabin, wheelR + bodyH * 1.6f, wheelR + bodyH * 2.8f + cabinH * 0.6f, ofColor(base.r, base.g, base.b, 140), ofColor(base.r, base.g, base.b, 85));
+            drawProjectedCircle(glm::vec3(worldPoint.x - carW * 0.86f, worldPoint.y - carL * 0.12f, wheelR), wheelR);
+            drawProjectedCircle(glm::vec3(worldPoint.x + carW * 0.86f, worldPoint.y - carL * 0.12f, wheelR), wheelR);
+            drawProjectedCircle(glm::vec3(worldPoint.x - carW * 0.86f, worldPoint.y + carL * 0.13f, wheelR), wheelR);
+            drawProjectedCircle(glm::vec3(worldPoint.x + carW * 0.86f, worldPoint.y + carL * 0.13f, wheelR), wheelR);
+            drawProjectedFill({glm::vec3(worldPoint.x - carW * 0.46f, worldPoint.y + carL * 0.02f, wheelR + bodyH * 2.2f), glm::vec3(worldPoint.x + carW * 0.14f, worldPoint.y + carL * 0.02f, wheelR + bodyH * 2.2f), glm::vec3(worldPoint.x + carW * 0.40f, worldPoint.y - carL * 0.07f, wheelR + bodyH * 2.8f), glm::vec3(worldPoint.x - carW * 0.27f, worldPoint.y - carL * 0.07f, wheelR + bodyH * 2.8f)}, ofColor(255, 255, 255, 55));
             break;
         }
     }
     ofPopStyle();
+}
+
+bool ofApp::drawPersonModel3D(const MovingShape& s) {
+    if (!personObjLoaded) return false;
+
+    const glm::vec3 worldPoint = shapeWorldPoint(s);
+    // Keep Meshy model proportions relative to each other instead of normalizing
+    // each class independently. If the person was authored larger than the cat,
+    // it should stay larger in the scene.
+    const float scale = 0.5f * ofMap(s.radius, 18.0f, 48.0f, 18.0f, 28.0f, true);
+    const float centerX = 0.5f * (personModelMin.x + personModelMax.x);
+    const float centerZ = 0.5f * (personModelMin.z + personModelMax.z);
+
+    glm::vec3 up(0.0f, 0.0f, 1.0f);
+    const glm::vec3 eye = cameraEyeWorld();
+    const glm::vec3 target = cameraTargetWorld();
+    const glm::vec3 forward = glm::normalize(target - eye);
+    if (std::abs(glm::dot(forward, up)) > 0.98f) {
+        up = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+
+    ofPushStyle();
+    ofEnableDepthTest();
+    ofFill();
+
+    ofCamera cam;
+    cam.setFov(48.0f);
+    cam.setNearClip(0.1f);
+    cam.setFarClip(400.0f);
+    cam.setPosition(eye);
+    cam.lookAt(target, up);
+
+    cam.begin();
+    ofPushMatrix();
+    ofTranslate(worldPoint);
+    ofRotateDeg(180.0f + s.yawDeg, 0.0f, 0.0f, 1.0f);
+    ofScale(scale, scale, scale);
+    ofRotateDeg(90.0f, 1.0f, 0.0f, 0.0f);
+    ofTranslate(-centerX, -personModelMin.y, -centerZ);
+
+    if (personObjTextureLoaded) {
+        ofSetColor(255);
+        personObjTexture.bind();
+        personObjMesh.drawFaces();
+        personObjTexture.unbind();
+    } else {
+        ofSetColor(228, 74, 74, 255);
+        personObjMesh.drawFaces();
+    }
+    ofNoFill();
+    ofSetColor(70, 20, 20, 90);
+    personObjMesh.drawWireframe();
+
+    ofPopMatrix();
+    cam.end();
+
+    ofDisableDepthTest();
+    ofPopStyle();
+    return true;
+}
+
+bool ofApp::drawCarModel3D(const MovingShape& s) {
+    if (!carObjLoaded) return false;
+
+    const glm::vec3 worldPoint = shapeWorldPoint(s);
+    const float scale = 0.5f * ofMap(s.radius, 18.0f, 48.0f, 18.0f, 28.0f, true);
+    const float centerX = 0.5f * (carModelMin.x + carModelMax.x);
+    const float centerZ = 0.5f * (carModelMin.z + carModelMax.z);
+
+    glm::vec3 up(0.0f, 0.0f, 1.0f);
+    const glm::vec3 eye = cameraEyeWorld();
+    const glm::vec3 target = cameraTargetWorld();
+    const glm::vec3 forward = glm::normalize(target - eye);
+    if (std::abs(glm::dot(forward, up)) > 0.98f) {
+        up = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+
+    ofPushStyle();
+    ofEnableDepthTest();
+    ofFill();
+
+    ofCamera cam;
+    cam.setFov(48.0f);
+    cam.setNearClip(0.1f);
+    cam.setFarClip(400.0f);
+    cam.setPosition(eye);
+    cam.lookAt(target, up);
+
+    cam.begin();
+    ofPushMatrix();
+    ofTranslate(worldPoint);
+    ofRotateDeg(180.0f + s.yawDeg, 0.0f, 0.0f, 1.0f);
+    ofScale(scale, scale, scale);
+    ofRotateDeg(90.0f, 1.0f, 0.0f, 0.0f);
+    ofTranslate(-centerX, -carModelMin.y, -centerZ);
+
+    if (carObjTextureLoaded) {
+        ofSetColor(255);
+        carObjTexture.bind();
+        carObjMesh.drawFaces();
+        carObjTexture.unbind();
+    } else {
+        ofSetColor(188, 40, 40, 255);
+        carObjMesh.drawFaces();
+    }
+    ofNoFill();
+    ofSetColor(40, 8, 8, 85);
+    carObjMesh.drawWireframe();
+
+    ofPopMatrix();
+    cam.end();
+
+    ofDisableDepthTest();
+    ofPopStyle();
+    return true;
+}
+
+bool ofApp::drawCatModel3D(const MovingShape& s) {
+    if (!catObjLoaded && (!catModelLoaded || catModelMeshes.empty())) return false;
+
+    const glm::vec3 worldPoint = shapeWorldPoint(s);
+    const float catL = ofMap(s.radius, 18.0f, 48.0f, 18.0f, 28.0f, true);
+    const float desiredHeight = catL * 0.95f;
+    const float scale = 0.5f * (desiredHeight / std::max(0.001f, catModelHeight));
+    const float centerX = 0.5f * (catModelMin.x + catModelMax.x);
+    const float centerZ = 0.5f * (catModelMin.z + catModelMax.z);
+
+    glm::vec3 up(0.0f, 0.0f, 1.0f);
+    const glm::vec3 eye = cameraEyeWorld();
+    const glm::vec3 target = cameraTargetWorld();
+    const glm::vec3 forward = glm::normalize(target - eye);
+    if (std::abs(glm::dot(forward, up)) > 0.98f) {
+        up = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+
+    ofPushStyle();
+    ofEnableDepthTest();
+    ofFill();
+
+    ofCamera cam;
+    cam.setFov(48.0f);
+    cam.setNearClip(0.1f);
+    cam.setFarClip(400.0f);
+    cam.setPosition(eye);
+    cam.lookAt(target, up);
+
+    cam.begin();
+    ofPushMatrix();
+    ofTranslate(worldPoint);
+    ofRotateDeg(180.0f + s.yawDeg, 0.0f, 0.0f, 1.0f);
+    ofScale(scale, scale, scale);
+    ofRotateDeg(90.0f, 1.0f, 0.0f, 0.0f);
+    ofTranslate(-centerX, -catModelMin.y, -centerZ);
+
+    if (catObjLoaded) {
+        if (catObjTextureLoaded) {
+            ofSetColor(255);
+            catObjTexture.bind();
+            catObjMesh.drawFaces();
+            catObjTexture.unbind();
+        } else {
+            ofSetColor(230, 165, 102, 255);
+            catObjMesh.drawFaces();
+        }
+        ofNoFill();
+        ofSetColor(92, 46, 24, 110);
+        catObjMesh.drawWireframe();
+    } else {
+        ofSetColor(255, 184, 206, 255);
+        for (const auto& mesh : catModelMeshes) {
+            mesh.drawFaces();
+        }
+        ofNoFill();
+        ofSetColor(40, 18, 26, 180);
+        for (const auto& mesh : catModelMeshes) {
+            mesh.drawWireframe();
+        }
+    }
+
+    ofPopMatrix();
+    cam.end();
+
+    ofDisableDepthTest();
+    ofPopStyle();
+    return true;
 }
 
 void ofApp::drawListenerHead() const {
@@ -916,53 +1758,6 @@ void ofApp::drawGroundPlane() const {
         ofSetColor(40, 62, 88, 120);
         ofDrawLine(hzL, hzR);
     }
-
-    const std::array<float, 9> yLines{{kWorldNearY, 75.0f, 50.0f, 25.0f, 0.0f, -25.0f, -50.0f, -75.0f, kWorldFarY}};
-    for (float y : yLines) {
-        glm::vec2 a;
-        glm::vec2 b;
-        if (!projectWorldPoint(glm::vec3(-kWorldSide, y, 0.0f), a, nullptr) ||
-            !projectWorldPoint(glm::vec3(kWorldSide, y, 0.0f), b, nullptr)) {
-            continue;
-        }
-        const float distWeight = ofMap(y, kWorldNearY, kWorldFarY, 0.0f, 1.0f, true);
-        const int alpha = static_cast<int>(ofLerp(90.0f, 24.0f, distWeight));
-        ofSetColor(28, 48, 72, alpha);
-        ofDrawLine(a, b);
-    }
-
-    for (int xi = -5; xi <= 5; ++xi) {
-        const float x = static_cast<float>(xi) * 20.0f;
-        glm::vec2 a;
-        glm::vec2 b;
-        if (!projectWorldPoint(glm::vec3(x, kWorldNearY, 0.0f), a, nullptr) ||
-            !projectWorldPoint(glm::vec3(x, kWorldFarY, 0.0f), b, nullptr)) {
-            continue;
-        }
-        const int alpha = (xi == 0) ? 120 : 52;
-        ofSetColor(34, 58, 84, alpha);
-        ofDrawLine(a, b);
-    }
-
-    glm::vec2 axisStart;
-    glm::vec2 axisEnd;
-    if (projectWorldPoint(glm::vec3(0.0f, kWorldNearY, 0.0f), axisStart, nullptr) &&
-        projectWorldPoint(glm::vec3(0.0f, kWorldFarY, 0.0f), axisEnd, nullptr)) {
-        ofSetColor(88, 208, 255, 140);
-        ofSetLineWidth(2.0f);
-        ofDrawLine(axisStart, axisEnd);
-    }
-
-    ofPolyline boundary;
-    for (int i = 0; i <= 96; ++i) {
-        const float ang = ofMap(static_cast<float>(i), 0.0f, 96.0f, -glm::pi<float>(), glm::pi<float>());
-        glm::vec2 s;
-        if (projectWorldPoint(glm::vec3(std::sin(ang) * kHemisphereRadius, std::cos(ang) * kHemisphereRadius, 0.0f), s, nullptr)) {
-            boundary.addVertex(s.x, s.y);
-        }
-    }
-    ofSetColor(88, 208, 255, 85);
-    boundary.draw();
     ofPopStyle();
 }
 
@@ -1121,26 +1916,24 @@ void ofApp::initShapes() {
     for (int i = 0; i < 10; ++i) {
         MovingShape s;
         s.radius = ofRandom(18.0f, 48.0f);
-        const float worldRadius = ofMap(s.radius, 18.0f, 48.0f, 3.8f, 12.5f, true);
+        s.objectKind = objectKindForPreset(objectPreset, i);
+        const float worldRadius = shapeWorldCollisionRadius(s);
         const float allowed = std::max(1.0f, kHemisphereRadius - worldRadius);
         const float ang = ofRandom(glm::two_pi<float>());
         const float rad = std::sqrt(ofRandomuf()) * allowed;
-        s.pos = glm::vec2(
-            ofMap(std::cos(ang) * rad, -kWorldSide, kWorldSide, 0.0f, static_cast<float>(frameW), true),
-            ofMap(std::sin(ang) * rad, kWorldFarY, kWorldNearY, 0.0f, static_cast<float>(frameH), true)
-        );
+        glm::vec2 candidateWorld(std::cos(ang) * rad, std::sin(ang) * rad);
+        s.pos = worldToScreenPoint(candidateWorld, frameW, frameH);
         for (int attempt = 0; attempt < 40; ++attempt) {
             bool overlaps = false;
             for (const auto& other : shapes) {
-                const float minDist = s.radius + other.radius + 14.0f;
-                if (glm::distance(s.pos, other.pos) < minDist) {
+                const glm::vec2 otherWorld = screenToWorldPoint(other.pos, frameW, frameH);
+                const float minDist = shapeWorldCollisionRadius(s) + shapeWorldCollisionRadius(other) + 0.5f;
+                if (glm::distance(candidateWorld, otherWorld) < minDist) {
                     overlaps = true;
                     const float a2 = ofRandom(glm::two_pi<float>());
                     const float r2 = std::sqrt(ofRandomuf()) * allowed;
-                    s.pos = glm::vec2(
-                        ofMap(std::cos(a2) * r2, -kWorldSide, kWorldSide, 0.0f, static_cast<float>(frameW), true),
-                        ofMap(std::sin(a2) * r2, kWorldFarY, kWorldNearY, 0.0f, static_cast<float>(frameH), true)
-                    );
+                    candidateWorld = glm::vec2(std::cos(a2) * r2, std::sin(a2) * r2);
+                    s.pos = worldToScreenPoint(candidateWorld, frameW, frameH);
                     break;
                 }
             }
@@ -1163,8 +1956,6 @@ void ofApp::initShapes() {
         s.depth = ofRandom(0.14f, 0.88f);
         s.depthVel = ofRandom(-0.08f, 0.08f);
         s.yawDeg = ofRandom(-180.0f, 180.0f);
-        s.objectKind = objectKindForPreset(objectPreset, i);
-
         float hue = fmodf(i * 27.0f, 255.0f);
         s.color = ofColor::fromHsb(static_cast<unsigned char>(hue), 220, 255);
         shapes.push_back(s);
@@ -1221,7 +2012,7 @@ bool ofApp::isShapeOn(const MovingShape& shape) const {
 
 float ofApp::edgeMetric01(const MovingShape& s) const {
     const glm::vec3 worldPoint = shapeWorldPoint(s);
-    const float worldRadius = ofMap(s.radius, 18.0f, 48.0f, 3.8f, 12.5f, true);
+    const float worldRadius = shapeWorldCollisionRadius(s);
     const float allowed = std::max(1.0f, kHemisphereRadius - worldRadius);
     return ofClamp(glm::length(glm::vec2(worldPoint.x, worldPoint.y)) / allowed, 0.0f, 1.0f);
 }
@@ -1381,7 +2172,7 @@ void ofApp::applyMagnetForce(MovingShape& shape, float dt, const glm::vec2& targ
 }
 
 void ofApp::keepInsideFrame(MovingShape& shape) {
-    const float worldRadius = ofMap(shape.radius, 18.0f, 48.0f, 3.8f, 12.5f, true);
+    const float worldRadius = shapeWorldCollisionRadius(shape);
     const float allowed = std::max(1.0f, kHemisphereRadius - worldRadius);
     glm::vec2 worldPos(
         ofMap(shape.pos.x, 0.0f, static_cast<float>(frameW), -kWorldSide, kWorldSide, true),
@@ -1391,16 +2182,12 @@ void ofApp::keepInsideFrame(MovingShape& shape) {
     if (dist > allowed) {
         glm::vec2 nrm = (dist > 0.0001f) ? (worldPos / dist) : glm::vec2(0.0f, 1.0f);
         if (edgeBounce) {
-            glm::vec2 velWorld(
-                shape.vel.x * ((2.0f * kWorldSide) / static_cast<float>(frameW)),
-                shape.vel.y * ((kWorldNearY - kWorldFarY) / static_cast<float>(frameH))
-            );
+            glm::vec2 velWorld = velocityScreenToWorld(shape.vel);
             glm::vec2 walkWorld(shape.walkDir.x, shape.walkDir.y);
             velWorld = glm::reflect(velWorld, nrm);
             walkWorld = glm::reflect(walkWorld, nrm);
             worldPos = nrm * allowed;
-            shape.vel.x = velWorld.x * (static_cast<float>(frameW) / (2.0f * kWorldSide));
-            shape.vel.y = velWorld.y * (static_cast<float>(frameH) / (kWorldNearY - kWorldFarY));
+            shape.vel = velocityWorldToScreen(velWorld);
             shape.walkDir = glm::normalize(glm::vec2(walkWorld.x, walkWorld.y));
         } else {
             worldPos = -nrm * allowed;
@@ -1412,7 +2199,7 @@ void ofApp::keepInsideFrame(MovingShape& shape) {
 
 void ofApp::keepInsideFrameAirHockey(MovingShape& shape) {
     constexpr float restitution = 0.987f;
-    const float worldRadius = ofMap(shape.radius, 18.0f, 48.0f, 3.8f, 12.5f, true);
+    const float worldRadius = shapeWorldCollisionRadius(shape);
     const float allowed = std::max(1.0f, kHemisphereRadius - worldRadius);
     glm::vec2 worldPos(
         ofMap(shape.pos.x, 0.0f, static_cast<float>(frameW), -kWorldSide, kWorldSide, true),
@@ -1421,14 +2208,10 @@ void ofApp::keepInsideFrameAirHockey(MovingShape& shape) {
     const float dist = glm::length(worldPos);
     if (dist > allowed) {
         glm::vec2 nrm = (dist > 0.0001f) ? (worldPos / dist) : glm::vec2(0.0f, 1.0f);
-        glm::vec2 velWorld(
-            shape.vel.x * ((2.0f * kWorldSide) / static_cast<float>(frameW)),
-            shape.vel.y * ((kWorldNearY - kWorldFarY) / static_cast<float>(frameH))
-        );
+        glm::vec2 velWorld = velocityScreenToWorld(shape.vel);
         velWorld = glm::reflect(velWorld, nrm) * restitution;
         worldPos = nrm * allowed;
-        shape.vel.x = velWorld.x * (static_cast<float>(frameW) / (2.0f * kWorldSide));
-        shape.vel.y = velWorld.y * (static_cast<float>(frameH) / (kWorldNearY - kWorldFarY));
+        shape.vel = velocityWorldToScreen(velWorld);
         shape.pos.x = ofMap(worldPos.x, -kWorldSide, kWorldSide, 0.0f, static_cast<float>(frameW), true);
         shape.pos.y = ofMap(worldPos.y, kWorldFarY, kWorldNearY, 0.0f, static_cast<float>(frameH), true);
     }
@@ -1527,7 +2310,7 @@ void ofApp::updateShapes(float dt) {
 
             const glm::vec2 rainDirWorld = glm::normalize(glm::vec2(rainDir.x, rainDir.y));
             const glm::vec2 worldPos = screenToWorldPoint(s.pos, frameW, frameH);
-            const float worldRadius = ofMap(s.radius, 18.0f, 48.0f, 3.8f, 12.5f, true);
+            const float worldRadius = shapeWorldCollisionRadius(s);
             const float allowed = std::max(1.0f, kHemisphereRadius - worldRadius);
             if (glm::dot(worldPos, rainDirWorld) > allowed + std::max(8.0f, worldRadius * 0.8f)) {
                 resetShapeForRain(s, false, laneIndex);
@@ -1661,7 +2444,7 @@ void ofApp::updateShapes(float dt) {
 }
 
 void ofApp::resetShapeForAirHockey(MovingShape& s) {
-    const float worldRadius = ofMap(s.radius, 18.0f, 48.0f, 3.8f, 12.5f, true);
+    const float worldRadius = shapeWorldCollisionRadius(s);
     const float allowed = std::max(1.0f, kHemisphereRadius - worldRadius);
     s.pos = worldToScreenPoint(randomWorldPointInCircle(allowed), frameW, frameH);
     glm::vec2 dir = glm::normalize(glm::vec2(ofRandomf(), ofRandomf()));
@@ -1677,7 +2460,7 @@ void ofApp::resetShapeForAirHockey(MovingShape& s) {
 void ofApp::resetShapeForRain(MovingShape& s, bool firstInit, int rainIndex) {
     const glm::vec2 dir = glm::normalize(rainDirectionUnit());
     const glm::vec2 tan = glm::normalize(rainTangentUnit());
-    const float worldRadius = ofMap(s.radius, 18.0f, 48.0f, 3.8f, 12.5f, true);
+    const float worldRadius = shapeWorldCollisionRadius(s);
     const float allowed = std::max(1.0f, kHemisphereRadius - worldRadius);
     const int laneCount = std::max(1, std::min(8, activeBlobLimit > 0 ? activeBlobLimit : 8));
     const int safeIndex = (rainIndex >= 0) ? std::min(rainIndex, laneCount - 1) : 0;
@@ -1708,52 +2491,129 @@ void ofApp::applyBlobRepulsion(float dt) {
     const int n = static_cast<int>(shapes.size());
     const float restitution = airHockeyMode ? 0.945f : 0.90f;
     const float collisionScale = airHockeyMode ? 0.80f : (magnetMode ? 0.35f : 1.0f);
+    std::vector<glm::vec2> worldPos(n);
+    std::vector<glm::vec2> worldVel(n);
+    std::vector<float> footprint(n);
+    std::vector<glm::vec2> halfExtents(n);
+    std::vector<glm::vec2> rightAxes(n);
+    std::vector<glm::vec2> forwardAxes(n);
+    auto modelHalfExtents = [&](const MovingShape& shape) {
+        const float trim = 0.44f;
+        switch (shape.objectKind) {
+            case ObjectKind::Person:
+                if (personObjLoaded) {
+                    const float scale = 0.5f * ofMap(shape.radius, 18.0f, 48.0f, 18.0f, 28.0f, true);
+                    return glm::vec2(
+                        std::max(0.8f, (personModelMax.x - personModelMin.x) * scale * trim),
+                        std::max(0.8f, personModelDepth * scale * trim)
+                    );
+                }
+                break;
+            case ObjectKind::Cat:
+                if (catObjLoaded || (catModelLoaded && !catModelMeshes.empty())) {
+                    const float catL = ofMap(shape.radius, 18.0f, 48.0f, 18.0f, 28.0f, true);
+                    const float scale = 0.5f * ((catL * 0.95f) / std::max(0.001f, catModelHeight));
+                    return glm::vec2(
+                        std::max(0.8f, (catModelMax.x - catModelMin.x) * scale * trim),
+                        std::max(0.8f, catModelDepth * scale * trim)
+                    );
+                }
+                break;
+            case ObjectKind::Car:
+                if (carObjLoaded) {
+                    const float scale = 0.5f * ofMap(shape.radius, 18.0f, 48.0f, 18.0f, 28.0f, true);
+                    return glm::vec2(
+                        std::max(0.8f, (carModelMax.x - carModelMin.x) * scale * trim),
+                        std::max(0.8f, carModelDepth * scale * trim)
+                    );
+                }
+                break;
+            default:
+                break;
+        }
+        const float r = shapeWorldCollisionRadius(shape);
+        return glm::vec2(r, r);
+    };
+    auto supportRadiusAlong = [](const glm::vec2& normal,
+                                 const glm::vec2& axisX,
+                                 const glm::vec2& axisY,
+                                 const glm::vec2& extents) {
+        return std::abs(glm::dot(normal, axisX)) * extents.x +
+               std::abs(glm::dot(normal, axisY)) * extents.y;
+    };
+    for (int i = 0; i < n; ++i) {
+        worldPos[i] = screenToWorldPoint(shapes[i].pos, frameW, frameH);
+        worldVel[i] = velocityScreenToWorld(shapes[i].vel);
+        footprint[i] = shapeWorldCollisionRadius(shapes[i]);
+        halfExtents[i] = modelHalfExtents(shapes[i]);
+        const float yaw = glm::radians(shapes[i].yawDeg);
+        rightAxes[i] = glm::vec2(std::cos(yaw), std::sin(yaw));
+        forwardAxes[i] = glm::vec2(-std::sin(yaw), std::cos(yaw));
+    }
+
+    for (int solverPass = 0; solverPass < 2; ++solverPass) {
+        for (int i = 0; i < n; ++i) {
+            if (!isShapeOn(shapes[i])) continue;
+            for (int j = i + 1; j < n; ++j) {
+                if (!isShapeOn(shapes[j])) continue;
+                glm::vec2 d = worldPos[i] - worldPos[j];
+                float dist = glm::length(d);
+                if (dist < 0.0001f) {
+                    d = glm::vec2(1.0f, 0.0f);
+                    dist = 0.0001f;
+                }
+                const glm::vec2 nrm = d / dist;
+                const float minDist =
+                    supportRadiusAlong(nrm, rightAxes[i], forwardAxes[i], halfExtents[i]) +
+                    supportRadiusAlong(nrm, rightAxes[j], forwardAxes[j], halfExtents[j]) +
+                    0.10f;
+                if (dist < 0.0001f || dist >= minDist) continue;
+
+                const glm::vec2 relVel = worldVel[i] - worldVel[j];
+                const float relNormalSpeed = glm::dot(relVel, nrm);
+
+                // Mass ~ footprint area so larger physical objects feel heavier.
+                const float m1 = std::max(1.0f, halfExtents[i].x * halfExtents[i].y * 4.0f);
+                const float m2 = std::max(1.0f, halfExtents[j].x * halfExtents[j].y * 4.0f);
+                const float invM1 = 1.0f / m1;
+                const float invM2 = 1.0f / m2;
+
+                if (relNormalSpeed < 0.0f) {
+                    float jImpulse = -(1.0f + restitution) * relNormalSpeed;
+                    jImpulse /= (invM1 + invM2);
+                    // Keep artistic control from collisionStrength.
+                    jImpulse *= (collisionStrength / 1200.0f) * collisionScale;
+                    const glm::vec2 impulse = jImpulse * nrm;
+                    worldVel[i] += impulse * invM1;
+                    worldVel[j] -= impulse * invM2;
+                    if (airHockeyMode) {
+                        // Keep some life, just stop runaway energy build-up.
+                        worldVel[i] *= 0.982f;
+                        worldVel[j] *= 0.982f;
+                        const float maxHockeySpeedWorld = 240.0f;
+                        const float spd1 = glm::length(worldVel[i]);
+                        const float spd2 = glm::length(worldVel[j]);
+                        if (spd1 > maxHockeySpeedWorld) worldVel[i] = glm::normalize(worldVel[i]) * maxHockeySpeedWorld;
+                        if (spd2 > maxHockeySpeedWorld) worldVel[j] = glm::normalize(worldVel[j]) * maxHockeySpeedWorld;
+                    }
+                }
+
+                // Positional correction (prevents sinking/sticking/tunneling).
+                const float overlap = minDist - dist;
+                const float corr = std::max(0.0f, overlap - 0.02f) * 0.95f;
+                const glm::vec2 correction = (corr / (invM1 + invM2)) * nrm;
+                worldPos[i] += correction * invM1;
+                worldPos[j] -= correction * invM2;
+            }
+        }
+    }
+
     for (int i = 0; i < n; ++i) {
         if (!isShapeOn(shapes[i])) continue;
-        for (int j = i + 1; j < n; ++j) {
-            if (!isShapeOn(shapes[j])) continue;
-            glm::vec2 d = shapes[i].pos - shapes[j].pos;
-            float dist = glm::length(d);
-            const float minDist = shapes[i].radius + shapes[j].radius + 2.0f;
-            if (dist < 0.0001f || dist >= minDist) continue;
-
-            const glm::vec2 nrm = d / dist;
-            const glm::vec2 relVel = shapes[i].vel - shapes[j].vel;
-            const float relNormalSpeed = glm::dot(relVel, nrm);
-
-            // Mass ~ area so larger blobs feel heavier.
-            const float m1 = std::max(1.0f, shapes[i].radius * shapes[i].radius);
-            const float m2 = std::max(1.0f, shapes[j].radius * shapes[j].radius);
-            const float invM1 = 1.0f / m1;
-            const float invM2 = 1.0f / m2;
-
-            if (relNormalSpeed < 0.0f) {
-                float jImpulse = -(1.0f + restitution) * relNormalSpeed;
-                jImpulse /= (invM1 + invM2);
-                // Keep artistic control from collisionStrength.
-                jImpulse *= (collisionStrength / 1200.0f) * collisionScale;
-                const glm::vec2 impulse = jImpulse * nrm;
-                shapes[i].vel += impulse * invM1;
-                shapes[j].vel -= impulse * invM2;
-                if (airHockeyMode) {
-                    // Keep some life, just stop runaway energy build-up.
-                    shapes[i].vel *= 0.982f;
-                    shapes[j].vel *= 0.982f;
-                    const float maxHockeySpeed = 760.0f;
-                    const float spd1 = glm::length(shapes[i].vel);
-                    const float spd2 = glm::length(shapes[j].vel);
-                    if (spd1 > maxHockeySpeed) shapes[i].vel = glm::normalize(shapes[i].vel) * maxHockeySpeed;
-                    if (spd2 > maxHockeySpeed) shapes[j].vel = glm::normalize(shapes[j].vel) * maxHockeySpeed;
-                }
-            }
-
-            // Positional correction (prevents sinking/sticking).
-            const float overlap = minDist - dist;
-            const float corr = std::max(0.0f, overlap - 0.2f) * 0.8f;
-            const glm::vec2 correction = (corr / (invM1 + invM2)) * nrm;
-            shapes[i].pos += correction * invM1;
-            shapes[j].pos -= correction * invM2;
-        }
+        const float allowed = std::max(1.0f, kHemisphereRadius - footprint[i]);
+        worldPos[i] = clampWorldToCircle(worldPos[i], allowed);
+        shapes[i].pos = worldToScreenPoint(worldPos[i], frameW, frameH);
+        shapes[i].vel = velocityWorldToScreen(worldVel[i]);
     }
 }
 
@@ -1780,7 +2640,6 @@ void ofApp::renderFrame() {
     ofPushStyle();
     ofBackgroundGradient(ofColor(8, 10, 16), ofColor(3, 5, 9), OF_GRADIENT_LINEAR);
     drawGroundPlane();
-    drawHemisphereOverlay();
 
     if (deadZoneEnabled && centerDeadZoneNorm > 0.0001f) {
         float deadZoneRadius = centerDeadZoneNorm * static_cast<float>(std::min(frameW, frameH));
@@ -1858,14 +2717,25 @@ void ofApp::update() {
     renderFrame();
 
     if (ndiSender.isSetup()) {
+        const double nowSec = ofGetElapsedTimef();
+        const double minSendIntervalSec = 1.0 / std::max(1.0f, ndiSendTargetFps);
+        if (lastNdiSendTimeSec >= 0.0 && (nowSec - lastNdiSendTimeSec) < minSendIntervalSec) {
+            return;
+        }
         fbo.readToPixels(pixels);
         ndiVideo.send(pixels);
+        lastNdiSendTimeSec = nowSec;
     }
 }
 
 void ofApp::draw() {
     ofSetColor(255);
     fbo.draw(0, 0, ofGetWidth(), ofGetHeight());
+    ofPushMatrix();
+    ofScale(static_cast<float>(ofGetWidth()) / static_cast<float>(frameW),
+            static_cast<float>(ofGetHeight()) / static_cast<float>(frameH));
+    drawHemisphereOverlay();
+    ofPopMatrix();
     drawTopDownOverview();
 
     ofDrawBitmapStringHighlight("NST NDI Motion Test 3D", 20, 24);
@@ -1903,7 +2773,7 @@ void ofApp::draw() {
     ofDrawBitmapStringHighlight("MIDI in: " + midiTakeoverStatus, 20, 124);
     if (showHelpOverlay) {
         ofDrawBitmapStringHighlight("Mode: [m] normal/brownian, [h] hockey, [g] rain, [f] flood, [n] natural/periodic/always-on", 20, 160);
-        ofDrawBitmapStringHighlight("Objects: [o] mixed/people/hands/dogs/objects/squares/stars", 20, 178);
+        ofDrawBitmapStringHighlight("Objects: [o] mixed/people/hands/cats/dogs/cubes/cars", 20, 178);
         ofDrawBitmapStringHighlight("Count: [b] auto, [0-10]+Enter manual, [[]/[]] +/-1 blob", 20, 196);
         ofDrawBitmapStringHighlight("Motion: [k] magnet, [</>] rain angle, [,/.] magnet strength, [p] physics, [c/v] collision", 20, 214);
         ofDrawBitmapStringHighlight("Bounds: [e] bounce, [d] dead-zone, [z/x] dead-zone size, [q] reset top view", 20, 232);
@@ -1977,6 +2847,11 @@ void ofApp::draw() {
         " | speed=" + ofToString(speed, 2),
         20, ofGetHeight() - 20
     );
+
+    if (!startupSnapshotSaved && ofGetFrameNum() >= 30) {
+        ofSaveScreen(kSenderSnapshotPath);
+        startupSnapshotSaved = true;
+    }
 }
 
 void ofApp::commitManualBlobInput() {
@@ -2121,9 +2996,9 @@ void ofApp::keyPressed(int key) {
     else if (key == 'e' || key == 'E') edgeBounce = !edgeBounce;
     else if (key == 'q' || key == 'Q') {
         viewYawDeg = 0.0f;
-        viewPitchDeg = 89.0f;
+        viewPitchDeg = 18.0f;
         observerOffsetX = 0.0f;
-        observerDistanceY = 160.0f;
+        observerDistanceY = 130.0f;
     }
     else if (key == 'd' || key == 'D') deadZoneEnabled = !deadZoneEnabled;
     else if (key == 'x' || key == 'X') { centerDeadZoneNorm = std::min(0.45f, centerDeadZoneNorm + 0.02f); deadZoneEnabled = true; }

@@ -52,4 +52,7 @@ public:
 
     float sidebarWidth = 220.0f;
     float guiScale = 1.0f;
+    std::string selfTestSnapshotPath;
+    bool selfTestSnapshotSaved = false;
+    int selfTestSnapshotFrame = 90;
 };

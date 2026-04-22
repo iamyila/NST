@@ -112,15 +112,31 @@ public:
 		}
     }
     
-    void update(){
+	void update(){
+        if (ndiIn && !receiver.isConnected()) {
+            reconnectFrameCounter++;
+            if (reconnectFrameCounter == 1 || (reconnectFrameCounter % 120) == 0) {
+                connect();
+            }
+        } else if (receiver.isConnected()) {
+            reconnectFrameCounter = 0;
+        }
+
 		if (receiver.update()) {
 			ofPixels& pix = receiver.getPixels();
-			//pix.setImageType(OF_IMAGE_COLOR);
-            //currentImage.setFromPixels(pix);
-            
             inImg.setFromPixels(pix);
             matRGBA = ofxCv::toCv(inImg);
-            cv::cvtColor(matRGBA, matRGB, cv::COLOR_RGBA2RGB);
+            if (matRGBA.channels() == 4) {
+                cv::cvtColor(matRGBA, matRGB, cv::COLOR_RGBA2RGB);
+            } else if (matRGBA.channels() == 3) {
+                matRGB = matRGBA;
+            } else if (matRGBA.channels() == 1) {
+                cv::cvtColor(matRGBA, matRGB, cv::COLOR_GRAY2RGB);
+            } else {
+                ofLogWarning("NDISource") << "Unsupported pixel channel count: " << matRGBA.channels();
+                return;
+            }
+
             if (bDetectBlob) {
                 tracker.updateByTrackingTechnique(matRGB);
             }
@@ -307,9 +323,10 @@ public:
     //ofxCvColorImage currentImage;
     cv::Mat matRGBA;
     cv::Mat matRGB;
+    int reconnectFrameCounter = 0;
     
     // General
-    ofParameter<string> NDI_name{"NDI Source Match (Manual)", "SENDER1"};
+    ofParameter<string> NDI_name{"NDI Source Match (Manual)", "NST Motion Test 3D"};
     ofParameter<bool> ndiIn{"NDI IN",true};
     ofParameter<bool> ndiOut{"NDI OUT", false};
 	ofParameter<int> processWidth{ "Process Width", 1280, 240, 1920};
