@@ -1,62 +1,63 @@
 # NST
-Nature Scene Tracker - Openframeworks Blob/motion tracker w NDI video in and out x10
 
-NDI-cv5 is the current version
+Nature Scene Tracker repo.
 
-https://github.com/iamyila/NST/blob/master/NDI-cv-mapper_28.5._2.amxd is the corresponding Maxforlive device. 
-  
-you will need Ableton live suite 11 + NDI runtime / NDI video sources
+This repo currently has two main directions:
 
-Orginal code by Sebastian Frisch http://freshmania.at/ - Hiroshi Matabo v5
+## Status
+- `NDI-cv5`: current usable blob / motion tracker
+- `NST1` / `NSTD`: current experimental AI / dance / pose direction
+- Older `NDI-cv*` and `NST*` folders: previous versions, tests, or archive material
 
-## OSC + Max Debug Notes (2026-02-27)
+## 1. `NDI-cv5` = current blob / motion tracker
+- This is the current working blob-based tracker.
+- Use this if you want the older contour / motion workflow.
+- This is the version to pair with the existing Max for Live blob mapping workflow.
+- Main idea: camera or NDI video in -> blob tracking -> OSC / Max for Live.
 
-### Current OSC naming in NDI-cv5
-- File: `NDI-cv5/src/OscSender.h`
-- OSC base address is hard-wired to: `/NDITracker1`
-- Per blob slot, app sends:
-  - `/NDITracker1/<slot>/val`
-  - `/NDITracker1/<slot>/on`
-  - `/NDITracker1/<slot>/off`
-- Slot index is 1-based (`1..10`).
+Related files:
+- `NDI-cv5/`
+- `NDI-osc-mapper28.5.amxd`
+- `max/`
 
-### Required Max parsing chain
-- If using `udpreceive`, parse true OSC packets with:
-  - `oscparse -> list trim -> route ...`
-- Do not route raw strings directly from `udpreceive` for this stream format.
+## 2. `NST1` -> builds as `NSTD` = new AI / dance direction
+- The source folder is `NST1/`.
+- The built app name is `NSTD`.
+- This is the newer AI / pose / dance-tracking direction.
+- Main idea: move beyond simple blobs toward person / pose / dance control.
+- This is the current experimental branch, not the old stable blob path.
 
-### Max files for testing/debug
-- Main patch under test: `max/NDI-osc-mapper28.5.maxpat`
-- Backup before edits: `max/NDI-osc-mapper28.5.maxpat.bak`
-- Fake sender for repeatable OSC tests: `max/fake_ndi5cv_osc_sender.maxpat`
-- UDP monitor template: `max/ndi_udp_monitor_template.maxpat`
-- True OSC receiver template: `max/ndi_cv5_true_osc_receiver_template.maxpat`
+Important detail:
+- `NST1` is the source tree.
+- `NSTD` is the app name produced by that source tree.
 
-### Known mismatch that breaks routing
-- Old pattern: `route NDITracker0 ...`
-- Current stream is address-based (`/NDITracker1/...`), so routing must match full parsed OSC addresses.
+## 3. Older folders
+These are mostly older versions, tests, or archive material:
+- `NDI-cv/`
+- `NDI-cv2/`
+- `NDI-cv3/`
+- `NDI-cv4/`
+- `NDI-cv6/`
+- `NSTtest/`
+- `NDI-test/`
+- `NDI-test-sender/`
+- `NDI-test-sender-3d/`
 
-### Practical debug technique
-- First verify packet arrival at `udpreceive`.
-- Then verify parsed address/value after `oscparse` and `list trim` (use `print` or message box).
-- Only after parse is correct, route to each encapsulated blob module.
+## Practical Summary
+If you are new to this repo:
+- Use `NDI-cv5` if you want the blob tracker path.
+- Use `NST1` / `NSTD` if you want the new AI / dance path.
+- Treat the other folders as history, experiments, support tools, or archive material unless you know you need them.
 
-## Tracking Technique Notes (Blob vs YOLO)
+## Requirements
+- NDI runtime / NDI video sources
+- Ableton Live Suite 11 if you are using the Max for Live devices
 
-### Current state
-- Tracking mode parameter exists in `NDI-cv5/src/mtbTrackerBase.h`:
-  - `Tracking Technique (0 Blob, 1 YOLO)`
-- Runtime dispatch exists in `NDI-cv5/src/mtbTracker.h`.
-- Current behavior:
-  - `0` runs blob tracking (active implementation).
-  - `1` logs a warning once and falls back to blob tracking.
+## More Detail
+For live handoff / state notes, see:
+- `CODEX_STATE.md`
+- `CLAUDE_HANDOFF_2026-04-08.md`
 
-### Decision tree (current)
-- `trackingTechnique == 0`:
-  - Process contours -> select blobs -> send OSC on/off/val.
-- `trackingTechnique == 1`:
-  - Enter YOLO placeholder branch -> fallback to blob path.
-
-### Integration point for future YOLO work
-- Add YOLO detector/tracker in `NDI-cv5/src/mtbTracker.h` where the YOLO placeholder branch currently lives.
-- Keep OSC emitter (`NDI-cv5/src/OscSender.h`) unchanged so Max mappings remain stable.
+Original code lineage:
+- Sebastian Frisch: http://freshmania.at/
+- Hiroshi Matoba / later NST variants
