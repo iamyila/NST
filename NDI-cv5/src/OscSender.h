@@ -6,7 +6,6 @@
 
 #include "ofMain.h"
 #include "ofxOsc.h"
-#import <Foundation/Foundation.h>
 #include <map>
 #include <vector>
 #include <cstdint>
@@ -146,7 +145,10 @@ namespace mtb{
             m.addIntArg(prevCount);
             m.addIntArg(currentCount);
             m.addIntArg(label);
-            NSLog(@"NDITrackerMerge prev=%d current=%d label=%d frame=%llu", prevCount, currentCount, label, frameCounter);
+            ofLogNotice("OscSender") << "NDITrackerMerge prev=" << prevCount
+                                      << " current=" << currentCount
+                                      << " label=" << label
+                                      << " frame=" << frameCounter;
             sender.sendMessage(m, false);
         }
 
@@ -155,7 +157,9 @@ namespace mtb{
             m.setAddress(oscDeathAddress);
             m.addIntArg(label);
             m.addIntArg(slot);
-            NSLog(@"NDITrackerDeath label=%d slot=%d frame=%llu", label, slot, frameCounter);
+            ofLogNotice("OscSender") << "NDITrackerDeath label=" << label
+                                      << " slot=" << slot
+                                      << " frame=" << frameCounter;
             sender.sendMessage(m, false);
         }
         

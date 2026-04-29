@@ -1,41 +1,37 @@
 # NST
 
-Nature Scene Tracker repo.
+Nature Scene Tracker repository.
 
-This repo currently has two main directions:
+## Current Layout
 
-## Status
-- `NDI-cv5`: current usable blob / motion tracker
-- `NST1` / `NSTD`: current experimental AI / dance / pose direction
-- `NDI-test-sender`: current classic sender for `NDI-cv5`
-- `NDI-test-sender-3d`: current 3D sender for `NST1` / `NSTD`
-- `archive/`: older versions, tests, or unused branches moved out of the way
-
-## 1. `NDI-cv5` = current blob / motion tracker
-- This is the current working blob-based tracker.
-- Use this if you want the older contour / motion workflow.
-- This is the version to pair with the existing Max for Live blob mapping workflow.
-- Main idea: camera or NDI video in -> blob tracking -> OSC / Max for Live.
-
-Related files:
+### Classic blob path
 - `NDI-cv5/`
+  - current usable blob / motion tracker
+- `NDI-test-sender/`
+  - current 2D sender used with `NDI-cv5`
+
+### New AI / dance path
+- `NST1/`
+  - newer AI / pose / dance tracking source tree
+  - builds the app called `NSTD`
+- `NDI-test-sender-3d/`
+  - current 3D sender used with `NST1` / `NSTD`
+
+### Shared / support
 - `NDI-osc-mapper28.5.amxd`
 - `max/`
-
-## 2. `NST1` -> builds as `NSTD` = new AI / dance direction
-- The source folder is `NST1/`.
-- The built app name is `NSTD`.
-- This is the newer AI / pose / dance-tracking direction.
-- Main idea: move beyond simple blobs toward person / pose / dance control.
-- This is the current experimental branch, not the old stable blob path.
-
-Important detail:
-- `NST1` is the source tree.
-- `NSTD` is the app name produced by that source tree.
-
-## 3. Older folders
-Older versions and unused branches have been moved to:
 - `archive/`
+
+## Status
+- `NDI-cv5`: current classic blob tracker
+- `NDI-test-sender`: current classic sender for the blob tracker
+- `NST1`: current AI / dance / pose development source
+- `NSTD`: app built from `NST1`
+- `NDI-test-sender-3d`: current 3D sender for the AI / dance path
+- `archive/`: older versions and unused branches
+
+## Archive
+Older versions were moved out of the top level into `archive/`.
 
 This currently includes:
 - `archive/NDI-cv/`
@@ -46,26 +42,20 @@ This currently includes:
 - `archive/NSTtest/`
 - `archive/NDI-test/`
 
-Current senders kept active:
-- `NDI-test-sender/` for the `NDI-cv5` blob path
-- `NDI-test-sender-3d/` for the `NST1` / `NSTD` path
-
 ## Practical Summary
-If you are new to this repo:
-- Use `NDI-cv5` if you want the blob tracker path.
-- Use `NST1` / `NSTD` if you want the new AI / dance path.
-- Use `NDI-test-sender` with `NDI-cv5`.
-- Use `NDI-test-sender-3d` with `NST1` / `NSTD`.
-- Ignore `archive/` unless you specifically need an old version.
+If you are new to the project:
+- use `NDI-cv5` for the classic blob workflow
+- use `NDI-test-sender` with `NDI-cv5`
+- use `NST1` if you want the newer AI / dance / `NSTD` direction
+- use `NDI-test-sender-3d` with `NST1` / `NSTD`
+- ignore `archive/` unless you specifically need an old version
 
 ## Requirements
 - NDI runtime / NDI video sources
 - Ableton Live Suite 11 if you are using the Max for Live devices
 
-## More Detail
-For live handoff / state notes, see:
-- `CODEX_STATE.md`
-- `CLAUDE_HANDOFF_2026-04-08.md`
+## Notes
+- `CODEX_STATE.md` and `CLAUDE_HANDOFF_2026-04-08.md` contain older handoff/debug notes and may lag behind the latest folder cleanup
 
 Original code lineage:
 - Sebastian Frisch: http://freshmania.at/
