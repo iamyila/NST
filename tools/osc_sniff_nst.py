@@ -66,7 +66,8 @@ while time.time() - start < DURATION:
         addr, args = parse_osc_packet(data)
     except Exception:
         continue
-    samples.append({"t": round(time.time() - start, 4), "addr": addr, "args": args})
+    now = time.time()
+    samples.append({"t": round(now - start, 4), "wall": now, "addr": addr, "args": args})
 
 by_addr = defaultdict(list)
 for sample in samples:

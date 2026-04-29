@@ -1,0 +1,57 @@
+{
+    "settings": {
+        "App": {
+            "Alpha_Blending": "1",
+            "Anti_Aliasing": "1",
+            "Background_Color": "0, 0, 0, 255",
+            "Depth_Test": "0",
+            "Log_Level": "OF_LOG_SILENT",
+            "Target_FPS": "33",
+            "Vertical_Sync": "1"
+        },
+        "NDI_Source_1": {
+            "Heat_Map": {
+                "Alpha": "200",
+                "Color_Scheme": "1",
+                "Size_Max_%": "5",
+                "Size_Min_%": "1"
+            },
+            "Layer": {
+                "Detect_Blob": "1",
+                "Glitch": "0",
+                "Heat_Map": "0"
+            },
+            "NDI_in_out": {
+                "NDI_IN": "1",
+                "NDI_OUT": "0",
+                "Name": "SENDER1",
+                "Process_Height": "720",
+                "Process_Width": "1280"
+            },
+            "OSC_send": {
+                "IP": "localhost",
+                "oscAddress": "/NDITracker0",
+                "port": "12345"
+            },
+            "Tracker": {
+                "BG": {
+                    "Background_Subtractor_Algo": "1",
+                    "Blur_amount": "0.942623",
+                    "Draw_Reference_Image": "0"
+                },
+                "Draw_Candidates": "0",
+                "Max_blob_candidate": "13",
+                "Max_blob_num": "2",
+                "Min_age": "19",
+                "find_holes": "1",
+                "maxArea": "227.642",
+                "max_distance__pix_": "320.122",
+                "minArea": "74.187",
+                "persistence__frames_": "60",
+                "simplify": "0"
+            }
+        },
+        "Scale_GUI": "1",
+        "Solo": "0"
+    }
+}

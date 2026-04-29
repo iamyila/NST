@@ -232,3 +232,13 @@ The next pass should stay inside `/Users/alastairmcneill/Documents/GitHub/NST/NS
 - The 188MB sender car OBJ is also ignored by the existing `*/bin` rule.
 - No staged files and no tracked files over 95MiB were found at this check.
 - If GitHub Desktop still shows the old dialog, cancel it and refresh/retry after the `.gitignore` change is committed.
+
+## 2026-04-22 Duplicate Slot / Truth Compare Update
+- Added sender ground-truth logging behind `NST_SENDER_TRUTH_PATH`, tracker diagnostics behind `NST_TRACKER_DIAG_PATH`, and OSC raw wall-time logging in `/Users/alastairmcneill/Documents/GitHub/NST/tools/osc_sniff_nst.py`.
+- Added `/Users/alastairmcneill/Documents/GitHub/NST/tools/compare_sender_truth_to_osc.py` to compare synthetic sender truth against NST OSC slots. This is now the preferred validator for synthetic runs; screenshots alone are not reliable.
+- Baseline truth compare `/tmp/osc_truth_compare2_20_compare.json` showed the user's complaint was valid: slots were binding to the same physical object, especially `car#2` (`NDITracker2` nearest `car#2` 1031 samples, `NDITracker3` nearest `car#2` 743 samples).
+- Patched `/Users/alastairmcneill/Documents/GitHub/NST/NST1/src/mtbTracker.h` so assignment search treats duplicate physical rectangles as conflicts, and removed same-source bypasses that let an owned source track duplicate an already selected slot.
+- Validation run `/tmp/osc_truth_dupfix2_15_compare.json` after that patch produced all three OSC routes and reduced simultaneous duplicate-nearest bins from about `86%` before to about `38%`; locked duplicate bins dropped from `330/399` to `16/300`.
+- Remaining issue: slot 2 still spends long periods in `occlusion_hold` and can lag/freeze during crossovers; this needs further work, but the duplicate-binding patch measured better than the prior line.
+- A later motion-prediction tweak reduced duplicate-nearest further but broke slot 1 badly (`NDITracker1` locked ratio `0.2562`, distance avg `0.32297`), so that motion tweak was reverted and NST rebuilt. Keep the duplicate-conflict patch; do not reapply the reverted motion-prediction constants without a better validator.
+- User reported the NST UI looked broken after the bad motion-prediction run. No UI/layout files were changed in that step, no NST/sender process remained running, and temporary launchctl diagnostics env vars were cleared. Treat this as likely bad tracker overlay/output unless the user confirms the actual GUI controls are broken.

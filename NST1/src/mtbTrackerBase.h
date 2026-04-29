@@ -156,24 +156,27 @@ namespace mtb{
         //ofParameter<float> smoothingRate{ "smoothingRate", 0.5, 0, 1.0 };
         ofParameter<int> maxBlobCandidate{ "Max blob candidate", 10, 1, 100 };
         ofParameter<bool> bDrawCandidates{ "Draw Candidates", true};
-        ofParameter<int> maxBlobNum{ "Max blob num", 3, 1, 10 };
+        ofParameter<int> maxBlobNum{ "Max tracked slots", 1, 1, 10 };
         ofParameter<int> minAge{ "Min age", 1, 0, 60 };
         // Stricter admission age when already tracking two or more blobs.
         // Helps avoid transient false positives stealing extra voices.
         ofParameter<int> extraVoiceMinAge{ "Extra voice min age", 2, 0, 120 };
-        // 0 = Blob, 1 = YOLO. NST1 defaults to YOLO.
-        ofParameter<int> trackingTechnique{ "Tracking Technique (0 Blob, 1 YOLO)", 1, 0, 1 };
+        // 0 = Blob, 1 = YOLO, 2 = Pose. NSTD defaults to Pose.
+        ofParameter<int> trackingTechnique{ "Tracking Technique (0 Blob, 1 YOLO, 2 Pose)", 2, 0, 2 };
         ofParameter<string> yoloModelPath{ "YOLO ONNX Path", "/Users/alastairmcneill/Documents/GitHub/NST/NST1/models/yolov8n_416.onnx" };
         ofParameter<string> yoloCoreMLModelPath{ "YOLO CoreML Path", "/Users/alastairmcneill/Documents/GitHub/NST/NST1/models/yolov8n_416.mlmodelc" };
         ofParameter<int> yoloInputSize{ "YOLO Input Size", 416, 416, 416 };
-        ofParameter<float> yoloConfidenceThreshold{ "YOLO Confidence", 0.05f, 0.01f, 0.99f };
+        ofParameter<float> yoloConfidenceThreshold{ "YOLO Confidence", 0.18f, 0.01f, 0.99f };
         ofParameter<float> yoloNmsThreshold{ "YOLO NMS", 0.60f, 0.0f, 0.99f };
-        ofParameter<string> yoloClassFilter{ "YOLO Class Filter", "person,car,cat" };
+        ofParameter<string> yoloClassFilter{ "YOLO Class Filter", "person" };
         ofParameter<bool> yoloRawMode{ "YOLO Raw Mode", false };
-        ofParameter<bool> yoloMotionGate{ "YOLO Motion Gate", false };
+        ofParameter<bool> yoloMotionGate{ "YOLO Motion Gate", true };
         ofParameter<bool> yoloDrawClassNames{ "YOLO Draw Class Names", true };
         ofParameterGroup yoloGrp{ "YOLO", yoloConfidenceThreshold, yoloNmsThreshold, yoloClassFilter, yoloRawMode, yoloDrawClassNames };
-        ofParameterGroup trackerAdvancedGrp{ "Tracking Advanced", bDrawCandidates };
-        ofParameterGroup grp{ "Tracker", yoloGrp, trackerAdvancedGrp };
+        ofParameter<float> poseJointConfidence{ "Pose Joint Confidence", 0.18f, 0.01f, 0.99f };
+        ofParameter<bool> poseDrawSkeleton{ "Pose Draw Skeleton", true };
+        ofParameterGroup poseGrp{ "Pose", poseJointConfidence, poseDrawSkeleton };
+        ofParameterGroup trackerAdvancedGrp{ "Tracking Advanced", minAge, extraVoiceMinAge, bDrawCandidates };
+        ofParameterGroup grp{ "Tracker", trackingTechnique, maxBlobNum, yoloMotionGate, yoloGrp, poseGrp, trackerAdvancedGrp };
     };
 }

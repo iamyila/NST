@@ -10,9 +10,12 @@
 #include "ofxOpenCv.h"
 #include "ofxCv.h"
 #include "OscSender.h"
+#include "PoseDetector.h"
 #include "YoloDetector.h"
 #include <algorithm>
 #include <array>
+#include <cstdlib>
+#include <fstream>
 #include <set>
 #include <sstream>
 
@@ -66,8 +69,13 @@ namespace mtb{
         }
 
         void updateByTrackingTechnique(cv::Mat & currentMat) {
+            syncTrackingTechniqueState();
             if (trackingTechnique == 0) {
                 update(currentMat);
+                return;
+            }
+            if (trackingTechnique == 2) {
+                updatePose(currentMat);
                 return;
             }
             updateYOLO(currentMat);
@@ -155,6 +163,51 @@ namespace mtb{
                 ofPopStyle();
             }
 
+            if (bDrawCandidates && trackingTechnique == 2 && poseLastDetection.valid) {
+                ofPushStyle();
+                ofSetRectMode(OF_RECTMODE_CENTER);
+                ofNoFill();
+                ofSetColor(120, 220, 255, 180);
+                const cv::Rect2f& bbox = poseLastDetection.boundingBox;
+                const glm::vec2 bboxCenter(bbox.x + bbox.width * 0.5f,
+                                           bbox.y + bbox.height * 0.5f);
+                ofPushMatrix();
+                ofTranslate(bboxCenter.x, bboxCenter.y);
+                ofDrawRectangle(0, 0, bbox.width, bbox.height);
+                ofDrawBitmapString("pose", -(bbox.width * 0.5f), -(bbox.height * 0.5f) - 6.0f);
+                ofPopMatrix();
+
+                auto drawJoint = [&](const PoseJoint& joint) {
+                    if (!joint.valid) return;
+                    ofDrawCircle(joint.position.x, joint.position.y, 5.0f);
+                };
+
+                auto drawBone = [&](const PoseJoint& a, const PoseJoint& b) {
+                    if (!poseDrawSkeleton || !a.valid || !b.valid) return;
+                    ofDrawLine(a.position.x, a.position.y, b.position.x, b.position.y);
+                };
+
+                drawBone(poseLastDetection.leftShoulder, poseLastDetection.rightShoulder);
+                drawBone(poseLastDetection.leftShoulder, poseLastDetection.leftElbow);
+                drawBone(poseLastDetection.leftElbow, poseLastDetection.leftWrist);
+                drawBone(poseLastDetection.rightShoulder, poseLastDetection.rightElbow);
+                drawBone(poseLastDetection.rightElbow, poseLastDetection.rightWrist);
+                drawBone(poseLastDetection.leftShoulder, poseLastDetection.leftHip);
+                drawBone(poseLastDetection.rightShoulder, poseLastDetection.rightHip);
+                drawBone(poseLastDetection.leftHip, poseLastDetection.rightHip);
+                drawBone(poseLastDetection.leftHip, poseLastDetection.leftKnee);
+                drawBone(poseLastDetection.leftKnee, poseLastDetection.leftAnkle);
+                drawBone(poseLastDetection.rightHip, poseLastDetection.rightKnee);
+                drawBone(poseLastDetection.rightKnee, poseLastDetection.rightAnkle);
+
+                drawJoint(poseLastDetection.torso);
+                drawJoint(poseLastDetection.leftWrist);
+                drawJoint(poseLastDetection.rightWrist);
+                drawJoint(poseLastDetection.leftAnkle);
+                drawJoint(poseLastDetection.rightAnkle);
+                ofPopStyle();
+            }
+
             if (trackingTechnique == 1 && yoloRawMode) {
                 ofPushStyle();
                 ofSetRectMode(OF_RECTMODE_CENTER);
@@ -191,7 +244,7 @@ namespace mtb{
                 
                 int label = *itr;
                 bool bNoteOnSent = isNoteOnSent(label);
-                const bool shouldRender = (trackingTechnique == 1) || bNoteOnSent;
+                const bool shouldRender = (trackingTechnique != 0) || bNoteOnSent;
                 if(!shouldRender){
                     i++;
                     continue;
@@ -252,6 +305,25 @@ namespace mtb{
                             if (scoreIt != yoloCurrentScores.end()) score = scoreIt->second;
                             hasGeometry = true;
                         }
+                    }
+                } else if (trackingTechnique == 2) {
+                    auto poseIt = poseSlots.find(label);
+                    if (poseIt != poseSlots.end()) {
+                        const auto& slotState = poseIt->second;
+                        usingRetained = slotState.missingFrames > 0;
+                        drawRectF = slotState.rect;
+                        rect = cv::Rect(
+                            static_cast<int>(std::round(slotState.rect.x)),
+                            static_cast<int>(std::round(slotState.rect.y)),
+                            static_cast<int>(std::round(slotState.rect.width)),
+                            static_cast<int>(std::round(slotState.rect.height))
+                        );
+                        center = slotState.center;
+                        area = slotState.area;
+                        age = slotState.age;
+                        vel = slotState.velocity;
+                        score = slotState.confidence;
+                        hasGeometry = true;
                     }
                 } else if(index != -1){
                     age = tracker.getAge(label);
@@ -315,6 +387,10 @@ namespace mtb{
                     ofDrawBitmapString(yoloClassName(classId) + " " + ofToString(score, 2),
                                        -(drawRectF.width * 0.5f),
                                        -(drawRectF.height * 0.5f) - 6.0f);
+                } else if (trackingTechnique == 2) {
+                    ofDrawBitmapString(poseSlotName(label) + " " + ofToString(score, 2),
+                                       -(drawRectF.width * 0.5f),
+                                       -(drawRectF.height * 0.5f) - 6.0f);
                 }
                 ofPopMatrix();
                 ofPopStyle();
@@ -333,6 +409,9 @@ namespace mtb{
             if (trackingTechnique == 1) {
                 return yoloTrackAgeForLabel(label);
             }
+            if (trackingTechnique == 2) {
+                return poseTrackAgeForLabel(label);
+            }
             return finder.getTracker().getAge(label);
         }
         
@@ -341,6 +420,8 @@ namespace mtb{
             //foregroundMat.draw(x, y, w, h);
             if(trackingTechnique == 1 && yoloPreviewImage.isAllocated()){
                 yoloPreviewImage.draw(x, y, w, h);
+            } else if(trackingTechnique == 2 && posePreviewImage.isAllocated()){
+                posePreviewImage.draw(x, y, w, h);
             } else if(bDrawReferenceImage){
                 foregroundImageOf.draw(x, y, w, h);
             }
@@ -385,6 +466,7 @@ namespace mtb{
             yoloFrameCounter++;
             yoloLastFrameSize = currentMat.size();
             updateYoloPreviewImage(currentMat);
+            updateYoloMotionGateState(currentMat);
 
             const bool shouldRunInference =
                 yoloTracks.empty() ||
@@ -483,6 +565,55 @@ namespace mtb{
             yoloCurrentRects.clear();
             yoloCurrentClassIds.clear();
             yoloCurrentScores.clear();
+            yoloMotionPrevGray.release();
+            yoloMotionDiff.release();
+            yoloMotionMask.release();
+            yoloMotionGateReady = false;
+        }
+
+        void resetPoseState() {
+            poseLastDetection = PoseDetection{};
+            poseCurrentRects.clear();
+            poseCurrentScores.clear();
+            poseSlots.clear();
+            poseLastFrameSize = cv::Size();
+        }
+
+        void clearActiveNotes() {
+            if (noteOnSentMap.empty()) {
+                return;
+            }
+
+            std::vector<int> labels;
+            labels.reserve(noteOnSentMap.size());
+            for (const auto& kv : noteOnSentMap) {
+                if (kv.second.bSent) {
+                    labels.push_back(kv.first);
+                }
+            }
+
+            for (const int label : labels) {
+                sendDeathNow(label);
+                sendNoteOff(label);
+            }
+            noteOnSentMap.clear();
+        }
+
+        void syncTrackingTechniqueState() {
+            const int requestedMode = trackingTechnique.get();
+            if (activeTrackingTechnique == requestedMode) {
+                return;
+            }
+
+            clearActiveNotes();
+            selectedBlobs.clear();
+            prevSelectedBlobCount = 0;
+            prevSelectedCenters.clear();
+            prevSelectedAreas.clear();
+            prevSelectedRects.clear();
+            resetYoloBackend();
+            resetPoseState();
+            activeTrackingTechnique = requestedMode;
         }
 
         void syncYoloRawModeState() {
@@ -533,12 +664,53 @@ namespace mtb{
 
         YoloDetectorConfig makeYoloTrackingConfig() const {
             YoloDetectorConfig config = makeYoloConfig();
+            config.confidenceThreshold = std::min(config.confidenceThreshold, yoloTrackLowConfidenceThreshold);
             // Let tracking see all detector classes, then map the live tracks to the
             // constrained display labels afterwards. Filtering inside the detector was
             // causing the third object to disappear whenever YOLO briefly guessed a
             // non-target class like "kite" or "sports ball".
-            config.classFilter.clear();
+            if (useThreeClassSceneLabeling()) {
+                config.classFilter.clear();
+            }
             return config;
+        }
+
+        PoseDetectorConfig makePoseConfig() const {
+            PoseDetectorConfig config;
+            config.minJointConfidence = poseJointConfidence.get();
+            return config;
+        }
+
+        bool ensurePoseLoaded() {
+#ifdef __APPLE__
+            if (poseLoaded && poseDetector) {
+                return true;
+            }
+
+            poseDetector = createVisionPoseDetector();
+            std::string error;
+            if (poseDetector && poseDetector->load(error)) {
+                poseLoaded = true;
+                poseWarned = false;
+                poseLoadedBackendName = poseDetector->backendName();
+                ofLogNotice("Tracker") << "Loaded pose backend: " << poseLoadedBackendName;
+                return true;
+            }
+
+            poseDetector.reset();
+            poseLoaded = false;
+            poseLoadedBackendName.clear();
+            if (!poseWarned) {
+                const std::string message = error.empty()
+                    ? "No usable pose backend found. Falling back to Blob tracking."
+                    : ("Pose backend load failed: " + error + ". Falling back to Blob tracking.");
+                ofLogWarning("Tracker") << message;
+                poseWarned = true;
+            }
+            return false;
+#else
+            return false;
+#endif
         }
 
         std::set<std::string> parsedYoloClassFilter() const {
@@ -571,11 +743,19 @@ namespace mtb{
         }
 
         bool useThreeClassSceneLabeling() const {
+            const std::string filterText = yoloClassFilter.get();
+            if (cachedThreeClassFilterValid && filterText == cachedThreeClassFilterText) {
+                return cachedThreeClassFilterValue;
+            }
             const auto filter = parsedYoloClassFilter();
-            return filter.size() == 3 &&
-                   filter.count("person") > 0 &&
-                   filter.count("car") > 0 &&
-                   filter.count("cat") > 0;
+            cachedThreeClassFilterText = filterText;
+            cachedThreeClassFilterValue =
+                filter.size() == 3 &&
+                filter.count("person") > 0 &&
+                filter.count("car") > 0 &&
+                filter.count("cat") > 0;
+            cachedThreeClassFilterValid = true;
+            return cachedThreeClassFilterValue;
         }
 
         int sceneGeometryClassId(const cv::Rect2f& rect) const {
@@ -860,12 +1040,34 @@ namespace mtb{
         }
 
         bool rectLooksLikeDuplicateTrack(const cv::Rect2f& a, const cv::Rect2f& b) const {
+            const float areaA = rectArea(a);
+            const float areaB = rectArea(b);
+            if (areaA <= 1.0f || areaB <= 1.0f) return false;
+
+            const float x1 = std::max(a.x, b.x);
+            const float y1 = std::max(a.y, b.y);
+            const float x2 = std::min(a.x + a.width, b.x + b.width);
+            const float y2 = std::min(a.y + a.height, b.y + b.height);
+            const float intersection = std::max(0.0f, x2 - x1) * std::max(0.0f, y2 - y1);
+            const float smallerContainment = intersection / std::max(std::min(areaA, areaB), 1.0f);
+            const float centerDistance = glm::distance(rectCenter(a), rectCenter(b));
+            const float minDiag = std::min(glm::length(glm::vec2(a.width, a.height)),
+                                           glm::length(glm::vec2(b.width, b.height)));
+            const bool strongContainmentDuplicate =
+                smallerContainment >= 0.62f &&
+                centerDistance <= std::max(minDiag * 0.45f, 32.0f);
+            const bool tightCenterDuplicate =
+                smallerContainment >= 0.42f &&
+                centerDistance <= std::max(minDiag * 0.25f, 22.0f);
+            if (strongContainmentDuplicate || tightCenterDuplicate) {
+                return true;
+            }
+
             if (!rectGeometryCompatible(a, b, 1.7f, 1.45f)) {
                 return false;
             }
 
             const float iou = rectIou(a, b);
-            const float centerDistance = glm::distance(rectCenter(a), rectCenter(b));
             const float diag = std::max(glm::length(glm::vec2(a.width, a.height)),
                                         glm::length(glm::vec2(b.width, b.height)));
             return rectDefinitelyReacquired(a, b) ||
@@ -948,6 +1150,342 @@ namespace mtb{
             yoloPreviewImage.update();
         }
 
+        void updatePosePreviewImage(const cv::Mat& currentMat) {
+            posePreviewImage.setFromPixels(currentMat.data, currentMat.cols, currentMat.rows, OF_IMAGE_COLOR);
+            posePreviewImage.update();
+        }
+
+        std::string poseSlotName(int slot) const {
+            switch (slot) {
+                case 1: return "torso";
+                case 2: return "left hand";
+                case 3: return "right hand";
+                case 4: return "left foot";
+                case 5: return "right foot";
+                default: return "pose";
+            }
+        }
+
+        int poseTrackAgeForLabel(int label) const {
+            auto it = poseSlots.find(label);
+            if (it == poseSlots.end()) {
+                return 0;
+            }
+            return it->second.age;
+        }
+
+        PoseJoint poseJointForSlot(int slot, const PoseDetection& detection) const {
+            switch (slot) {
+                case 1:
+                    return detection.torso.valid ? detection.torso : detection.root;
+                case 2:
+                    return detection.leftWrist;
+                case 3:
+                    return detection.rightWrist;
+                case 4:
+                    return detection.leftAnkle;
+                case 5:
+                    return detection.rightAnkle;
+                default:
+                    return PoseJoint{};
+            }
+        }
+
+        cv::Rect2f poseSlotRectForJoint(int slot,
+                                        const PoseJoint& joint,
+                                        const PoseDetection& detection,
+                                        const cv::Size& frameSize) const {
+            if (!joint.valid) {
+                return cv::Rect2f();
+            }
+
+            const float baseHeight = std::max(detection.boundingBox.height, 80.0f);
+            float width = std::max(baseHeight * 0.14f, 24.0f);
+            float height = width;
+
+            if (slot == 1) {
+                width = std::max(detection.boundingBox.width * 0.32f, 42.0f);
+                height = std::max(baseHeight * 0.28f, 42.0f);
+            } else if (slot == 4 || slot == 5) {
+                width = std::max(baseHeight * 0.16f, 26.0f);
+                height = width;
+            }
+
+            const cv::Rect2f rect(joint.position.x - width * 0.5f,
+                                  joint.position.y - height * 0.5f,
+                                  width,
+                                  height);
+            return clampRectToFrame(rect, frameSize);
+        }
+
+        void updatePose(cv::Mat & currentMat) {
+            if (!ensurePoseLoaded()) {
+                update(currentMat);
+                return;
+            }
+
+            beginOscFrame();
+            poseLastFrameSize = currentMat.size();
+            updatePosePreviewImage(currentMat);
+
+            PoseDetection detection;
+            std::string error;
+            if (!poseDetector->infer(currentMat, makePoseConfig(), detection, error)) {
+                ofLogError("Tracker") << "Pose infer failed (" << poseLoadedBackendName << "): " << error;
+            }
+            poseLastDetection = detection;
+
+            selectedBlobs.clear();
+            poseCurrentRects.clear();
+            poseCurrentScores.clear();
+
+            std::set<int> activeSlots;
+            std::vector<int> expiredSlots;
+            std::map<int, glm::vec2> currentSelectedCenters;
+            std::map<int, float> currentSelectedAreas;
+            std::map<int, cv::Rect> currentSelectedRects;
+
+            const float frameArea = std::max(static_cast<float>(currentMat.cols * currentMat.rows), 1.0f);
+            int soundingCount = 0;
+            for (const auto& kv : noteOnSentMap) {
+                if (kv.second.bSent && !kv.second.bDead) {
+                    soundingCount++;
+                }
+            }
+
+            auto activateSlot = [&](int slot, const PoseJoint& joint) {
+                if (!joint.valid || slot < 1 || slot > maxBlobNum) {
+                    return;
+                }
+
+                const cv::Rect2f measuredRect = poseSlotRectForJoint(slot, joint, detection, currentMat.size());
+                if (measuredRect.width <= 0.0f || measuredRect.height <= 0.0f) {
+                    return;
+                }
+
+                const glm::vec2 measuredCenter(measuredRect.x + measuredRect.width * 0.5f,
+                                               measuredRect.y + measuredRect.height * 0.5f);
+                auto& state = poseSlots[slot];
+                const bool hadState = state.age > 0;
+                const glm::vec2 previousCenter = state.center;
+                const cv::Rect2f previousRect = state.rect;
+                state.name = poseSlotName(slot);
+                state.confidence = joint.confidence;
+
+                if (hadState) {
+                    const float alpha = slot == 1 ? 0.40f : 0.55f;
+                    state.center = glm::mix(state.center, measuredCenter, alpha);
+                    state.rect = lerpRect(previousRect, measuredRect, alpha);
+                    const glm::vec2 measuredVelocity = measuredCenter - previousCenter;
+                    state.velocity = glm::mix(state.velocity, measuredVelocity, 0.45f);
+                    state.age = (state.missingFrames > 0) ? 1 : (state.age + 1);
+                } else {
+                    state.center = measuredCenter;
+                    state.rect = measuredRect;
+                    state.velocity = glm::vec2(0.0f, 0.0f);
+                    state.age = 1;
+                }
+
+                state.missingFrames = 0;
+                state.area = rectArea(state.rect) / frameArea;
+
+                selectedBlobs.push_back(slot);
+                activeSlots.insert(slot);
+                poseCurrentRects[slot] = cv::Rect(
+                    static_cast<int>(std::round(state.rect.x)),
+                    static_cast<int>(std::round(state.rect.y)),
+                    static_cast<int>(std::round(state.rect.width)),
+                    static_cast<int>(std::round(state.rect.height))
+                );
+                poseCurrentScores[slot] = state.confidence;
+                currentSelectedCenters[slot] = state.center;
+                currentSelectedAreas[slot] = state.area;
+                currentSelectedRects[slot] = poseCurrentRects[slot];
+
+                forceLabelToSlot(slot, slot);
+
+                if (!isNoteOnSent(slot)) {
+                    int requiredAge = minAge;
+                    if (soundingCount >= 2) {
+                        requiredAge = std::max(requiredAge, static_cast<int>(extraVoiceMinAge));
+                    }
+                    if (state.age >= requiredAge) {
+                        sendNoteOn(slot);
+                        noteOnSentMap[slot].bSent = true;
+                        noteOnSentMap[slot].bDead = false;
+                        noteOnSentMap[slot].framesAfterDeath = -1;
+                        soundingCount++;
+                    }
+                } else {
+                    noteOnSentMap[slot].bDead = false;
+                    noteOnSentMap[slot].framesAfterDeath = -1;
+                }
+            };
+
+            if (detection.valid) {
+                for (int slot = 1; slot <= std::min(maxBlobNum.get(), 5); ++slot) {
+                    activateSlot(slot, poseJointForSlot(slot, detection));
+                }
+            }
+
+            for (auto& kv : poseSlots) {
+                const int slot = kv.first;
+                auto& state = kv.second;
+                if (slot < 1 || slot > maxBlobNum || activeSlots.count(slot) > 0) {
+                    if (slot > maxBlobNum && noteOnSentMap.count(slot) > 0) {
+                        expiredSlots.push_back(slot);
+                    }
+                    continue;
+                }
+
+                state.missingFrames++;
+                if (state.missingFrames > getTrackHoldFrames()) {
+                    expiredSlots.push_back(slot);
+                    continue;
+                }
+
+                state.center += state.velocity * 0.35f;
+                state.velocity *= 0.80f;
+                state.rect = clampRectToFrame(offsetRect(state.rect, state.velocity * 0.35f), currentMat.size());
+                state.center = rectCenter(state.rect);
+                state.area = rectArea(state.rect) / frameArea;
+                state.age++;
+
+                selectedBlobs.push_back(slot);
+                poseCurrentRects[slot] = cv::Rect(
+                    static_cast<int>(std::round(state.rect.x)),
+                    static_cast<int>(std::round(state.rect.y)),
+                    static_cast<int>(std::round(state.rect.width)),
+                    static_cast<int>(std::round(state.rect.height))
+                );
+                poseCurrentScores[slot] = state.confidence;
+                currentSelectedCenters[slot] = state.center;
+                currentSelectedAreas[slot] = state.area;
+                currentSelectedRects[slot] = poseCurrentRects[slot];
+                forceLabelToSlot(slot, slot);
+            }
+
+            for (const int slot : expiredSlots) {
+                if (noteOnSentMap.count(slot) > 0 && noteOnSentMap[slot].bSent) {
+                    sendDeathNow(slot);
+                    sendNoteOff(slot);
+                    noteOnSentMap.erase(slot);
+                }
+                poseSlots.erase(slot);
+                poseCurrentRects.erase(slot);
+                poseCurrentScores.erase(slot);
+            }
+
+            prevSelectedBlobCount = static_cast<int>(selectedBlobs.size());
+            prevSelectedCenters = currentSelectedCenters;
+            prevSelectedAreas = currentSelectedAreas;
+            prevSelectedRects = currentSelectedRects;
+
+            emitOscForSelectedLabels(currentSelectedCenters, currentSelectedAreas, currentMat.cols, currentMat.rows);
+        }
+
+        void updateYoloMotionGateState(const cv::Mat& currentMat) {
+            if (!yoloMotionGate) {
+                yoloMotionPrevGray.release();
+                yoloMotionDiff.release();
+                yoloMotionMask.release();
+                yoloMotionGateReady = false;
+                return;
+            }
+
+            if (currentMat.empty()) return;
+
+            cv::Mat gray;
+            if (currentMat.channels() == 3) {
+                cv::cvtColor(currentMat, gray, cv::COLOR_RGB2GRAY);
+            } else if (currentMat.channels() == 4) {
+                cv::cvtColor(currentMat, gray, cv::COLOR_RGBA2GRAY);
+            } else if (currentMat.channels() == 1) {
+                gray = currentMat;
+            } else {
+                yoloMotionGateReady = false;
+                return;
+            }
+
+            cv::GaussianBlur(gray, gray, cv::Size(5, 5), 0.0);
+
+            if (yoloMotionPrevGray.empty() || yoloMotionPrevGray.size() != gray.size()) {
+                gray.copyTo(yoloMotionPrevGray);
+                yoloMotionDiff = cv::Mat::zeros(gray.size(), CV_8UC1);
+                yoloMotionMask = cv::Mat::zeros(gray.size(), CV_8UC1);
+                yoloMotionGateReady = false;
+                return;
+            }
+
+            cv::absdiff(gray, yoloMotionPrevGray, yoloMotionDiff);
+            cv::threshold(yoloMotionDiff, yoloMotionMask, yoloMotionDiffThreshold, 255, cv::THRESH_BINARY);
+            cv::dilate(yoloMotionMask, yoloMotionMask, cv::Mat(), cv::Point(-1, -1), 1);
+
+            gray.copyTo(yoloMotionPrevGray);
+            yoloMotionGateReady = true;
+        }
+
+        bool yoloDetectionHasEnoughMotion(const cv::Rect& rect) const {
+            if (!yoloMotionGate) return true;
+            if (!yoloMotionGateReady || yoloMotionMask.empty() || yoloMotionDiff.empty()) return false;
+
+            cv::Rect frameRect(0, 0, yoloMotionMask.cols, yoloMotionMask.rows);
+            cv::Rect roi = rect & frameRect;
+            if (roi.width < 6 || roi.height < 6) return false;
+
+            const int insetX = std::min(std::max(roi.width / 10, 1), 6);
+            const int insetY = std::min(std::max(roi.height / 10, 1), 6);
+            if (roi.width > (insetX * 2 + 2) && roi.height > (insetY * 2 + 2)) {
+                roi.x += insetX;
+                roi.y += insetY;
+                roi.width -= insetX * 2;
+                roi.height -= insetY * 2;
+            }
+
+            const float frameArea = std::max(1.0f, static_cast<float>(yoloMotionMask.cols * yoloMotionMask.rows));
+            const float roiAreaFraction = static_cast<float>(roi.area()) / frameArea;
+            const float minActiveFraction = ofMap(roiAreaFraction, 0.01f, 0.35f, 0.014f, 0.0035f, true);
+            const float minMeanDiff = ofMap(roiAreaFraction, 0.01f, 0.35f, 9.0f, 3.5f, true);
+
+            const cv::Mat motionRoi = yoloMotionMask(roi);
+            const cv::Mat diffRoi = yoloMotionDiff(roi);
+            const float activeFraction = static_cast<float>(cv::countNonZero(motionRoi)) /
+                                         std::max(1.0f, static_cast<float>(roi.area()));
+            const float meanDiff = static_cast<float>(cv::mean(diffRoi)[0]);
+
+            return activeFraction >= minActiveFraction || meanDiff >= minMeanDiff;
+        }
+
+        void applyYoloMotionGate(std::vector<cv::Rect>& boxes,
+                                 std::vector<int>& classIds,
+                                 std::vector<float>& confidences) const {
+            if (!yoloMotionGate) return;
+            if (!yoloMotionGateReady || yoloMotionMask.empty() || yoloMotionDiff.empty()) {
+                boxes.clear();
+                classIds.clear();
+                confidences.clear();
+                return;
+            }
+
+            std::vector<cv::Rect> gatedBoxes;
+            std::vector<int> gatedClassIds;
+            std::vector<float> gatedConfidences;
+            gatedBoxes.reserve(boxes.size());
+            gatedClassIds.reserve(classIds.size());
+            gatedConfidences.reserve(confidences.size());
+
+            for (std::size_t i = 0; i < boxes.size(); ++i) {
+                if (!yoloDetectionHasEnoughMotion(boxes[i])) continue;
+                gatedBoxes.push_back(boxes[i]);
+                if (i < classIds.size()) gatedClassIds.push_back(classIds[i]);
+                if (i < confidences.size()) gatedConfidences.push_back(confidences[i]);
+            }
+
+            boxes.swap(gatedBoxes);
+            classIds.swap(gatedClassIds);
+            confidences.swap(gatedConfidences);
+        }
+
         int yoloTrackAgeForLabel(int label) const {
             auto trackIt = yoloTracks.find(label);
             if (trackIt != yoloTracks.end()) {
@@ -979,6 +1517,17 @@ namespace mtb{
             return static_cast<int>(ofMap(trackHoldStrictness, 0.0f, 100.0f, 8.0f, 2.0f, true));
         }
 
+        int yoloOcclusionOutputRetentionFramesForSlot(int slot, int occupiedSlotCount) const {
+            if (occupiedSlotCount <= 0) {
+                return yoloVisualRetentionFramesForSlot(slot);
+            }
+            // If another slot is still visible, a missing slot is usually occluded
+            // during a crossover. Keep emitting predicted OSC briefly so Max does
+            // not freeze on a stale value while YOLO/template matching reacquires.
+            (void)slot;
+            return std::max(yoloVisualRetentionFramesForSlot(slot), yoloOcclusionOutputHoldFrames);
+        }
+
         int yoloSourcePredictionMissesForSlot(int slot) const {
             (void)slot;
             // A slot's own source track should be allowed to coast through
@@ -997,7 +1546,7 @@ namespace mtb{
         }
 
         int yoloVisualTrackerRetentionFrames() const {
-            return 240;
+            return 36;
         }
 
         cv::Rect safeTrackerInitRect(const cv::Rect2f& rect, const cv::Size& frameSize) const {
@@ -1059,7 +1608,7 @@ namespace mtb{
 
             const float basePadding =
                 std::max(visualTracker.lastRect.width, visualTracker.lastRect.height) *
-                (1.35f + std::min(visualTracker.framesSinceYolo, 90) * 0.018f);
+                (0.95f + std::min(visualTracker.framesSinceYolo, 24) * 0.010f);
             cv::Rect2f searchRectF(
                 visualTracker.lastRect.x - basePadding,
                 visualTracker.lastRect.y - basePadding,
@@ -1088,7 +1637,7 @@ namespace mtb{
             }
             double bestScore = -1.0;
             cv::Rect bestRect;
-            const std::array<float, 5> scales{{0.80f, 0.92f, 1.0f, 1.10f, 1.22f}};
+            const std::array<float, 3> scales{{0.92f, 1.0f, 1.10f}};
             for (const float scale : scales) {
                 cv::Mat templateImage;
                 if (std::abs(scale - 1.0f) < 0.001f) {
@@ -1493,9 +2042,22 @@ namespace mtb{
                 track.candidateClassMatches = 0;
             }
 
+            int aliveSlotMemoryCount = 0;
+            for (const auto& slotKv : yoloSlotMemoryTracks) {
+                if (slotKv.first < 1 || slotKv.first > maxBlobNum) continue;
+                if (slotKv.second.missingFrames <= yoloOcclusionOutputHoldFrames) {
+                    aliveSlotMemoryCount++;
+                }
+            }
+            const bool needsAnotherOutputSlot = aliveSlotMemoryCount < maxBlobNum;
+            const float newTrackThreshold =
+                (useThreeClassSceneLabeling() && needsAnotherOutputSlot) ?
+                    std::min(primaryThreshold, yoloTrackNewSlotConfidenceFloor) :
+                    primaryThreshold;
+
             for (std::size_t i = 0; i < boxes.size(); ++i) {
                 if (matchedDetections.count(static_cast<int>(i)) > 0) continue;
-                if (confidences[i] < primaryThreshold) continue;
+                if (confidences[i] < newTrackThreshold) continue;
                 const cv::Rect2f incomingRect(boxes[i].x, boxes[i].y, boxes[i].width, boxes[i].height);
                 if (detectionLooksImplausiblyLargeForThreeScene(incomingRect)) continue;
                 bool overlapsExistingTrack = false;
@@ -1607,6 +2169,72 @@ namespace mtb{
             }
         }
 
+        bool ensureYoloDiagStream() {
+            if (yoloDiagInitialized) {
+                return yoloDiagStream.is_open();
+            }
+
+            yoloDiagInitialized = true;
+            const char* path = std::getenv("NST_TRACKER_DIAG_PATH");
+            if (!path || path[0] == '\0') {
+                return false;
+            }
+
+            yoloDiagStream.open(path, std::ios::out | std::ios::trunc);
+            if (!yoloDiagStream.is_open()) {
+                return false;
+            }
+
+            yoloDiagStream
+                << "frame,slot,mode,source_track,missing_frames,age,score,x,y,w,h,"
+                << "selected_count,visible_track_count,track_count,track_rect_count\n";
+            return true;
+        }
+
+        void writeYoloSlotDiagnostics(const std::vector<int>& slots,
+                                      const std::map<int, cv::Rect>& rects,
+                                      const std::map<int, std::string>& modes,
+                                      std::size_t visibleTrackCount,
+                                      std::size_t trackRectCount) {
+            if (!ensureYoloDiagStream()) return;
+
+            for (const int slot : slots) {
+                auto rectIt = rects.find(slot);
+                if (rectIt == rects.end()) continue;
+
+                auto memoryIt = yoloSlotMemoryTracks.find(slot);
+                const int sourceTrack =
+                    memoryIt != yoloSlotMemoryTracks.end() ? memoryIt->second.sourceTrackId : -1;
+                const int missingFrames =
+                    memoryIt != yoloSlotMemoryTracks.end() ? memoryIt->second.missingFrames : -1;
+                const int age =
+                    memoryIt != yoloSlotMemoryTracks.end() ? memoryIt->second.age : yoloTrackAgeForLabel(slot);
+                const float score =
+                    memoryIt != yoloSlotMemoryTracks.end() ? memoryIt->second.score : 0.0f;
+                auto modeIt = modes.find(slot);
+                const std::string mode = modeIt != modes.end() ? modeIt->second : "unknown";
+                const cv::Rect& rect = rectIt->second;
+
+                yoloDiagStream
+                    << yoloFrameCounter << ','
+                    << slot << ','
+                    << mode << ','
+                    << sourceTrack << ','
+                    << missingFrames << ','
+                    << age << ','
+                    << score << ','
+                    << rect.x << ','
+                    << rect.y << ','
+                    << rect.width << ','
+                    << rect.height << ','
+                    << slots.size() << ','
+                    << visibleTrackCount << ','
+                    << yoloTracks.size() << ','
+                    << trackRectCount << '\n';
+            }
+            yoloDiagStream.flush();
+        }
+
         void processYoloTrackedResults(const cv::Mat& currentMat) {
             const int frameWidth = currentMat.cols;
             const int frameHeight = currentMat.rows;
@@ -1689,6 +2317,7 @@ namespace mtb{
             std::map<int, glm::vec2> currentSelectedCenters;
             std::map<int, float> currentSelectedAreas;
             std::map<int, cv::Rect> currentSelectedRects;
+            std::map<int, std::string> currentSelectedModes;
 
             auto updateSlotFromTrack = [&](int slot, int trackId) {
                 if (slot < 1 || slot > maxBlobNum) return;
@@ -1716,7 +2345,7 @@ namespace mtb{
                 }
 
                 for (const auto& currentRectKv : currentSelectedRects) {
-                    if (slotForYoloSourceTrack(trackId) == slot) {
+                    if (currentRectKv.first == slot) {
                         continue;
                     }
                     const cv::Rect& occupiedRectI = currentRectKv.second;
@@ -1730,7 +2359,10 @@ namespace mtb{
                 RetainedOutputTrack& memoryTrack = yoloSlotMemoryTracks[slot];
                 cv::Rect2f outputRectF = currentRectF;
                 if (hadMemory) {
-                    const float alpha = memoryTrack.missingFrames > 0 ? 0.26f : 0.38f;
+                    const float alpha =
+                        memoryTrack.missingFrames > yoloVisualRetentionFramesForSlot(slot) ? 0.72f :
+                        memoryTrack.missingFrames > 0 ? 0.52f :
+                        0.38f;
                     outputRectF = smoothOutputRect(memoryTrack.rect, currentRectF, alpha);
                     rect = cv::Rect(
                         static_cast<int>(std::round(outputRectF.x)),
@@ -1773,6 +2405,7 @@ namespace mtb{
                 currentSelectedCenters[slot] = center;
                 currentSelectedAreas[slot] = area;
                 currentSelectedRects[slot] = rect;
+                currentSelectedModes[slot] = track.visibleThisFrame ? "detect" : "track_predict";
 
                 bool noteOnSent = isNoteOnSent(slot);
                 if (!noteOnSent) {
@@ -1995,6 +2628,14 @@ namespace mtb{
 
             auto assignmentsConflict = [&](int slotA, int trackA, int slotB, int trackB) {
                 if (slotA == slotB || trackA == trackB) return true;
+                auto trackAIt = yoloTracks.find(trackA);
+                auto trackBIt = yoloTracks.find(trackB);
+                if (trackAIt == yoloTracks.end() || trackBIt == yoloTracks.end()) {
+                    return false;
+                }
+                if (rectLooksLikeDuplicateTrack(trackAIt->second.rect, trackBIt->second.rect)) {
+                    return true;
+                }
                 return false;
             };
 
@@ -2071,7 +2712,11 @@ namespace mtb{
                 RetainedOutputTrack& memoryTrack = kv.second;
                 memoryTrack.missingFrames++;
                 memoryTrack.age++;
-                memoryTrack.velocity *= 0.35f;
+                const bool sceneStillActiveForOcclusion =
+                    !occupiedSlots.empty() ||
+                    !prevSelectedSlots.empty() ||
+                    !retainedOutputTracks.empty();
+                memoryTrack.velocity *= sceneStillActiveForOcclusion ? 0.88f : 0.35f;
                 if (memoryTrack.missingFrames > yoloSlotMemoryRetentionFrames()) {
                     expiredSlotMemory.push_back(slot);
                     continue;
@@ -2093,17 +2738,18 @@ namespace mtb{
                                                 sourceRectI.width,
                                                 sourceRectI.height);
                     bool looksLikeDuplicate = false;
-                    if (slotForYoloSourceTrack(sourceTrackId) != slot) {
-                        for (const auto& currentRectKv : currentSelectedRects) {
-                            const cv::Rect& occupiedRectI = currentRectKv.second;
-                            const cv::Rect2f occupiedRect(occupiedRectI.x,
-                                                          occupiedRectI.y,
-                                                          occupiedRectI.width,
-                                                          occupiedRectI.height);
-                            if (rectLooksLikeDuplicateTrack(occupiedRect, sourceRectF)) {
-                                looksLikeDuplicate = true;
-                                break;
-                            }
+                    for (const auto& currentRectKv : currentSelectedRects) {
+                        if (currentRectKv.first == slot) {
+                            continue;
+                        }
+                        const cv::Rect& occupiedRectI = currentRectKv.second;
+                        const cv::Rect2f occupiedRect(occupiedRectI.x,
+                                                      occupiedRectI.y,
+                                                      occupiedRectI.width,
+                                                      occupiedRectI.height);
+                        if (rectLooksLikeDuplicateTrack(occupiedRect, sourceRectF)) {
+                            looksLikeDuplicate = true;
+                            break;
                         }
                     }
 
@@ -2111,7 +2757,10 @@ namespace mtb{
                         (sourceTrack.visibleThisFrame || sourceTrack.missedFrames <= yoloSourcePredictionMissesForSlot(slot)) &&
                         !detectionLooksImplausiblyLargeForThreeScene(sourceRectF)) {
                         RetainedOutputTrack visibleTrack = memoryTrack;
-                        const float sourceAlpha = sourceTrack.visibleThisFrame ? 0.34f : 0.22f;
+                        const float sourceAlpha =
+                            sourceTrack.visibleThisFrame ?
+                                (memoryTrack.missingFrames > yoloVisualRetentionFramesForSlot(slot) ? 0.66f : 0.44f) :
+                                0.26f;
                         visibleTrack.rect = smoothOutputRect(memoryTrack.rect, sourceRectF, sourceAlpha);
                         visibleTrack.velocity = sourceTrack.velocity;
                         visibleTrack.area =
@@ -2145,11 +2794,17 @@ namespace mtb{
                         currentSelectedCenters[slot] = center;
                         currentSelectedAreas[slot] = visibleTrack.area;
                         currentSelectedRects[slot] = rect;
+                        currentSelectedModes[slot] =
+                            sourceTrack.visibleThisFrame ? "source_detect" : "source_predict";
                         continue;
                     }
                 }
 
-                if (memoryTrack.missingFrames <= yoloVisualTrackerRetentionFrames()) {
+                const bool shouldTryVisualTracker =
+                    memoryTrack.missingFrames <= yoloVisualTrackerRetentionFrames() &&
+                    (memoryTrack.missingFrames <= 3 ||
+                     (yoloFrameCounter % std::max(1, yoloVisualTrackerUpdateInterval)) == 0);
+                if (shouldTryVisualTracker) {
                     cv::Rect2f trackedRectF;
                     glm::vec2 trackedVelocity(0.0f, 0.0f);
                     if (updateSlotVisualTracker(slot, currentMat, trackedRectF, trackedVelocity)) {
@@ -2181,12 +2836,59 @@ namespace mtb{
                         currentSelectedCenters[slot] = center;
                         currentSelectedAreas[slot] = trackedArea;
                         currentSelectedRects[slot] = rect;
+                        currentSelectedModes[slot] = "template";
                         continue;
                     }
                 }
 
                 const bool wasVisibleLastFrame =
                     std::find(prevSelectedSlots.begin(), prevSelectedSlots.end(), slot) != prevSelectedSlots.end();
+                const auto previousRetainedIt = retainedOutputTracks.find(slot);
+                const bool canHoldThroughOcclusion =
+                    sceneStillActiveForOcclusion &&
+                    memoryTrack.missingFrames <= yoloOcclusionOutputRetentionFramesForSlot(
+                        slot,
+                        static_cast<int>(std::max(occupiedSlots.size(), prevSelectedSlots.size()))
+                    );
+                if (canHoldThroughOcclusion) {
+                    RetainedOutputTrack visibleTrack = memoryTrack;
+                    if (previousRetainedIt != retainedOutputTracks.end()) {
+                        visibleTrack.rect = previousRetainedIt->second.rect;
+                    }
+
+                    const cv::Rect2f predictedRect = clampRectToFrame(
+                        offsetRect(visibleTrack.rect, memoryTrack.velocity * 0.70f),
+                        currentMat.size()
+                    );
+                    visibleTrack.rect = smoothOutputRect(visibleTrack.rect, predictedRect, 0.55f);
+                    visibleTrack.velocity = memoryTrack.velocity;
+                    visibleTrack.area =
+                        rectArea(visibleTrack.rect) / static_cast<float>(frameWidth * frameHeight);
+                    visibleTrack.score *= yoloTrackScoreDecay;
+                    visibleTrack.missingFrames = memoryTrack.missingFrames;
+
+                    memoryTrack.rect = visibleTrack.rect;
+                    memoryTrack.area = visibleTrack.area;
+                    memoryTrack.score = visibleTrack.score;
+                    retainedOutputTracks[slot] = visibleTrack;
+
+                    const cv::Rect rect(
+                        static_cast<int>(std::round(visibleTrack.rect.x)),
+                        static_cast<int>(std::round(visibleTrack.rect.y)),
+                        static_cast<int>(std::round(visibleTrack.rect.width)),
+                        static_cast<int>(std::round(visibleTrack.rect.height))
+                    );
+                    const glm::vec2 center(rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f);
+                    selectedBlobs.push_back(slot);
+                    occupiedSlots.insert(slot);
+                    advancedRetainedSlots.insert(slot);
+                    currentSelectedCenters[slot] = center;
+                    currentSelectedAreas[slot] = visibleTrack.area;
+                    currentSelectedRects[slot] = rect;
+                    currentSelectedModes[slot] = "occlusion_hold";
+                    continue;
+                }
+
                 if (!wasVisibleLastFrame) {
                     retainedOutputTracks.erase(slot);
                     continue;
@@ -2220,6 +2922,7 @@ namespace mtb{
                 currentSelectedCenters[slot] = center;
                 currentSelectedAreas[slot] = visibleTrack.area;
                 currentSelectedRects[slot] = rect;
+                currentSelectedModes[slot] = "visual_hold";
             }
 
             for (const int slot : expiredSlotMemory) {
@@ -2286,6 +2989,11 @@ namespace mtb{
             prevSelectedRects = currentSelectedRects;
 
             emitOscForSelectedLabels(currentSelectedCenters, currentSelectedAreas, frameWidth, frameHeight);
+            writeYoloSlotDiagnostics(selectedBlobs,
+                                     currentSelectedRects,
+                                     currentSelectedModes,
+                                     visibleTrackIds.size(),
+                                     trackRects.size());
 
             yoloCurrentRects.clear();
             yoloCurrentClassIds.clear();
@@ -2320,10 +3028,29 @@ namespace mtb{
                 const int label = itr->first;
                 NoteOnInfo& info = itr->second;
                 const bool stillSelected = std::find(selectedBlobs.begin(), selectedBlobs.end(), label) != selectedBlobs.end();
-                const bool hasContinuityMemory = yoloSlotMemoryTracks.count(label) > 0;
+                const bool isYoloSlotLabel = label >= 1 && label <= maxBlobNum;
+                const auto memoryIt = yoloSlotMemoryTracks.find(label);
+                const bool hasContinuityMemory = memoryIt != yoloSlotMemoryTracks.end();
+                const bool hasRetainedOutput = retainedOutputTracks.count(label) > 0;
+                const bool wasSelectedRecently =
+                    std::find(prevSelectedSlots.begin(), prevSelectedSlots.end(), label) != prevSelectedSlots.end();
+                const bool sceneStillActiveForOcclusion =
+                    !selectedBlobs.empty() ||
+                    !prevSelectedSlots.empty() ||
+                    !retainedOutputTracks.empty();
+                const int occupiedCountForHold =
+                    static_cast<int>(std::max(selectedBlobs.size(), prevSelectedSlots.size()));
+                const bool memoryWithinOcclusionHold =
+                    hasContinuityMemory &&
+                    memoryIt->second.missingFrames <=
+                        yoloOcclusionOutputRetentionFramesForSlot(label, occupiedCountForHold);
+                const bool shouldKeepYoloSlotAlive =
+                    isYoloSlotLabel &&
+                    sceneStillActiveForOcclusion &&
+                    (stillSelected || memoryWithinOcclusionHold || hasRetainedOutput || wasSelectedRecently);
 
                 if (info.bSent && !stillSelected) {
-                    if (hasContinuityMemory) {
+                    if (hasContinuityMemory || shouldKeepYoloSlotAlive) {
                         info.bDead = false;
                         info.framesAfterDeath = -1;
                     } else if (!info.bDead) {
@@ -2347,9 +3074,21 @@ namespace mtb{
 
             for (const int label : dels) {
                 noteOnSentMap.erase(label);
-                yoloSlotMemoryTracks.erase(label);
-                yoloSlotVisualTrackers.erase(label);
-                retainedOutputTracks.erase(label);
+                const bool isYoloSlotLabel = label >= 1 && label <= maxBlobNum;
+                if (!isYoloSlotLabel) {
+                    yoloSlotMemoryTracks.erase(label);
+                    yoloSlotVisualTrackers.erase(label);
+                    retainedOutputTracks.erase(label);
+                    continue;
+                }
+
+                auto memoryIt = yoloSlotMemoryTracks.find(label);
+                if (memoryIt == yoloSlotMemoryTracks.end() ||
+                    memoryIt->second.missingFrames > yoloSlotMemoryRetentionFrames()) {
+                    yoloSlotMemoryTracks.erase(label);
+                    yoloSlotVisualTrackers.erase(label);
+                    retainedOutputTracks.erase(label);
+                }
             }
         }
 
@@ -2374,6 +3113,21 @@ namespace mtb{
                     }
 
                     sendVal(label, vel, areaIt->second, age, centerIt->second, inputSize);
+                }
+                return;
+            }
+
+            if (trackingTechnique == 2) {
+                for (const int label : selectedBlobs) {
+                    const auto centerIt = centers.find(label);
+                    const auto areaIt = areas.find(label);
+                    const auto poseIt = poseSlots.find(label);
+                    if (centerIt == centers.end() || areaIt == areas.end() || poseIt == poseSlots.end()) {
+                        continue;
+                    }
+
+                    const auto& state = poseIt->second;
+                    sendVal(label, state.velocity, areaIt->second, state.age, centerIt->second, inputSize);
                 }
                 return;
             }
@@ -2748,6 +3502,8 @@ namespace mtb{
                 classIds.push_back(detection.classId);
                 confidences.push_back(detection.score);
             }
+
+            applyYoloMotionGate(boxes, classIds, confidences);
         }
 
         void processTrackedResults(int frameWidth, int frameHeight){
@@ -3005,9 +3761,21 @@ namespace mtb{
         std::string yoloLoadedPath;
         std::string yoloLoadedBackendName;
         ofImage yoloPreviewImage;
+        std::unique_ptr<PoseDetectorBackend> poseDetector;
+        bool poseLoaded = false;
+        bool poseWarned = false;
+        std::string poseLoadedBackendName;
+        ofImage posePreviewImage;
+        PoseDetection poseLastDetection;
+        cv::Mat yoloMotionPrevGray;
+        cv::Mat yoloMotionDiff;
+        cv::Mat yoloMotionMask;
+        bool yoloMotionGateReady = false;
         std::map<int, cv::Rect> yoloCurrentRects;
         std::map<int, int> yoloCurrentClassIds;
         std::map<int, float> yoloCurrentScores;
+        std::map<int, cv::Rect> poseCurrentRects;
+        std::map<int, float> poseCurrentScores;
         struct YoloStableDetection {
             cv::Rect2f rect;
             glm::vec2 velocity = glm::vec2(0.0f, 0.0f);
@@ -3048,12 +3816,25 @@ namespace mtb{
             int framesSinceYolo = 0;
             bool initialized = false;
         };
+        struct PoseSlotState {
+            std::string name;
+            cv::Rect2f rect;
+            glm::vec2 center = glm::vec2(0.0f, 0.0f);
+            glm::vec2 velocity = glm::vec2(0.0f, 0.0f);
+            float area = 0.0f;
+            int age = 0;
+            int missingFrames = 0;
+            float confidence = 0.0f;
+        };
         std::map<int, YoloTrack> yoloTracks;
+        std::map<int, PoseSlotState> poseSlots;
         int yoloNextTrackId = 1;
         std::vector<YoloStableDetection> yoloStableDetections;
         std::map<int, RetainedOutputTrack> yoloSlotMemoryTracks;
         std::map<int, SlotVisualTracker> yoloSlotVisualTrackers;
         std::map<int, RetainedOutputTrack> retainedOutputTracks;
+        bool yoloDiagInitialized = false;
+        std::ofstream yoloDiagStream;
         int yoloFrameCounter = 0;
         int yoloInferenceInterval = 3;
         // Keep the tracker reference view in sync with the live frame instead of
@@ -3061,11 +3842,13 @@ namespace mtb{
         int yoloPreviewUpdateInterval = 1;
         bool yoloRawModeActive = false;
         cv::Size yoloLastFrameSize;
+        int yoloMotionDiffThreshold = 12;
         float yoloTrackMinIou = 0.03f;
         float yoloTrackCenterDistanceFactor = 1.25f;
         float yoloTrackMinCenterDistancePx = 70.0f;
         float yoloTrackLowConfidenceThreshold = 0.02f;
         float yoloTrackPrimaryConfidenceFloor = 0.05f;
+        float yoloTrackNewSlotConfidenceFloor = 0.035f;
         float yoloTrackRectSmoothing = 0.82f;
         float yoloTrackScoreSmoothing = 0.55f;
         float yoloTrackScoreDecay = 0.99f;
@@ -3099,8 +3882,15 @@ namespace mtb{
         float yoloStableTrackMatchPx = 220.0f;
         int yoloStableTrackPersistenceFrames = 96;
         int yoloOutputRetentionFrames = 120;
+        int yoloOcclusionOutputHoldFrames = 150;
+        int yoloVisualTrackerUpdateInterval = 4;
         float yoloOutputVelocityDecay = 0.94f;
         float yoloOutputPredictionFactor = 0.08f;
+        mutable bool cachedThreeClassFilterValid = false;
+        mutable bool cachedThreeClassFilterValue = false;
+        mutable std::string cachedThreeClassFilterText;
+        cv::Size poseLastFrameSize;
+        int activeTrackingTechnique = -1;
     };
     
 }

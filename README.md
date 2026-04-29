@@ -7,7 +7,9 @@ This repo currently has two main directions:
 ## Status
 - `NDI-cv5`: current usable blob / motion tracker
 - `NST1` / `NSTD`: current experimental AI / dance / pose direction
-- Older `NDI-cv*` and `NST*` folders: previous versions, tests, or archive material
+- `NDI-test-sender`: current classic sender for `NDI-cv5`
+- `NDI-test-sender-3d`: current 3D sender for `NST1` / `NSTD`
+- `archive/`: older versions, tests, or unused branches moved out of the way
 
 ## 1. `NDI-cv5` = current blob / motion tracker
 - This is the current working blob-based tracker.
@@ -32,22 +34,29 @@ Important detail:
 - `NSTD` is the app name produced by that source tree.
 
 ## 3. Older folders
-These are mostly older versions, tests, or archive material:
-- `NDI-cv/`
-- `NDI-cv2/`
-- `NDI-cv3/`
-- `NDI-cv4/`
-- `NDI-cv6/`
-- `NSTtest/`
-- `NDI-test/`
-- `NDI-test-sender/`
-- `NDI-test-sender-3d/`
+Older versions and unused branches have been moved to:
+- `archive/`
+
+This currently includes:
+- `archive/NDI-cv/`
+- `archive/NDI-cv2/`
+- `archive/NDI-cv3/`
+- `archive/NDI-cv4/`
+- `archive/NDI-cv6/`
+- `archive/NSTtest/`
+- `archive/NDI-test/`
+
+Current senders kept active:
+- `NDI-test-sender/` for the `NDI-cv5` blob path
+- `NDI-test-sender-3d/` for the `NST1` / `NSTD` path
 
 ## Practical Summary
 If you are new to this repo:
 - Use `NDI-cv5` if you want the blob tracker path.
 - Use `NST1` / `NSTD` if you want the new AI / dance path.
-- Treat the other folders as history, experiments, support tools, or archive material unless you know you need them.
+- Use `NDI-test-sender` with `NDI-cv5`.
+- Use `NDI-test-sender-3d` with `NST1` / `NSTD`.
+- Ignore `archive/` unless you specifically need an old version.
 
 ## Requirements
 - NDI runtime / NDI video sources

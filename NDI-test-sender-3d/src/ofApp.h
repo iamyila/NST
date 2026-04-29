@@ -5,6 +5,7 @@
 #include "ofxNDISender.h"
 #include "ofxNDISendStream.h"
 #include <array>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <tuple>
@@ -160,6 +161,8 @@ private:
     bool handlePresetGridAt(int x, int y);
     ofRectangle getPresetCellRect(int row, int col) const;
     bool isShapeOn(const MovingShape& shape) const;
+    void setupTruthLog();
+    void writeTruthLog(const std::vector<int>& visibleShapeIndices);
     void renderFrame();
     void applyPeriodicBlinkControls();
     void savePresetSlot(int slotIndex);
@@ -183,6 +186,8 @@ private:
 
     ofxNDISender ndiSender;
     ofxNDISendVideo ndiVideo;
+    std::ofstream truthLog;
+    bool truthLogEnabled = false;
     ofxAssimpModelLoader catModel;
     ofVboMesh catObjMesh;
     ofImage catObjTexture;

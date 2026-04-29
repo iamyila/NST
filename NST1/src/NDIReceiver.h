@@ -134,6 +134,9 @@ public:
 				yres = frame.yres;
 
 				if (xres != 0 && yres != 0) {
+					if (!pixels.isAllocated() || pixels.getWidth() != xres || pixels.getHeight() != yres) {
+						allocate(xres, yres);
+					}
 					video.decodeTo(pixels);
 					return true;
 				}

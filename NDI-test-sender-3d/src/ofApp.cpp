@@ -1,5 +1,8 @@
 #include "ofApp.h"
+#include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <iomanip>
 #include <limits>
 #include <sstream>
 
@@ -39,6 +42,23 @@ const char* objectPresetLabel(ofApp::ObjectPreset preset) {
         case ofApp::ObjectPreset::Cars: return "Cars";
     }
     return "Mixed";
+}
+
+const char* objectKindLabel(ofApp::ObjectKind kind) {
+    switch (kind) {
+        case ofApp::ObjectKind::Person: return "person";
+        case ofApp::ObjectKind::Hand: return "hand";
+        case ofApp::ObjectKind::Cat: return "cat";
+        case ofApp::ObjectKind::Dog: return "dog";
+        case ofApp::ObjectKind::PlainObject: return "object";
+        case ofApp::ObjectKind::Car: return "car";
+    }
+    return "object";
+}
+
+double wallTimeSeconds() {
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    return std::chrono::duration<double>(now).count();
 }
 
 ofApp::ObjectKind objectKindForPreset(ofApp::ObjectPreset preset, int index) {
@@ -543,6 +563,7 @@ constexpr const char* kSenderSnapshotPath = "/tmp/ndi-test-sender-3d-snapshot.pn
 void ofApp::setup() {
     ofSetFrameRate(30);
     ofBackground(16);
+    setupTruthLog();
 
     ofFbo::Settings fboSettings;
     fboSettings.width = frameW;
@@ -573,6 +594,54 @@ void ofApp::setup() {
     loadPresetFile();
     setupMidiInput();
     startupSnapshotSaved = false;
+}
+
+void ofApp::setupTruthLog() {
+    const char* path = std::getenv("NST_SENDER_TRUTH_PATH");
+    if (!path || path[0] == '\0') {
+        truthLogEnabled = false;
+        return;
+    }
+
+    truthLog.open(path, std::ios::out | std::ios::trunc);
+    truthLogEnabled = truthLog.is_open();
+    if (!truthLogEnabled) {
+        ofLogWarning("ofApp") << "Unable to open sender truth log: " << path;
+        return;
+    }
+
+    truthLog
+        << std::fixed << std::setprecision(6)
+        << "wall_time,frame,index,kind,x,y,radius,depth,active_blob_limit,visible_count\n";
+}
+
+void ofApp::writeTruthLog(const std::vector<int>& visibleShapeIndices) {
+    if (!truthLogEnabled || !truthLog.is_open()) return;
+
+    const double now = wallTimeSeconds();
+    const int frame = ofGetFrameNum();
+    const int visibleCount = static_cast<int>(visibleShapeIndices.size());
+    for (const int idx : visibleShapeIndices) {
+        if (idx < 0 || idx >= static_cast<int>(shapes.size())) continue;
+        const MovingShape& s = shapes[idx];
+
+        glm::vec2 projected;
+        float cameraDepth = 0.0f;
+        if (!projectWorldPoint(shapeWorldPoint(s), projected, &cameraDepth)) continue;
+
+        truthLog
+            << now << ','
+            << frame << ','
+            << idx << ','
+            << objectKindLabel(s.objectKind) << ','
+            << (projected.x / static_cast<float>(frameW)) << ','
+            << (projected.y / static_cast<float>(frameH)) << ','
+            << (projectRadius(s) / static_cast<float>(std::min(frameW, frameH))) << ','
+            << cameraDepth << ','
+            << activeBlobLimit << ','
+            << visibleCount << '\n';
+    }
+    truthLog.flush();
 }
 
 void ofApp::applyPeriodicBlinkControls() {
@@ -2675,11 +2744,15 @@ void ofApp::renderFrame() {
         return a.cameraDepth > b.cameraDepth;
     });
 
+    std::vector<int> visibleShapeIndices;
+    visibleShapeIndices.reserve(visible.size());
     for (const auto& item : visible) {
         const auto& s = shapes[item.idx];
+        visibleShapeIndices.push_back(item.idx);
         ofSetColor(s.color);
         drawShape3D(s, item.idx);
     }
+    writeTruthLog(visibleShapeIndices);
 
     drawListenerHead();
 

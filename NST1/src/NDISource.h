@@ -334,7 +334,7 @@ public:
 	ofParameterGroup generalGrp{ "NDI in/out", NDI_name, ndiIn, ndiOut /*ndiInHighestBandwidth,*/ };
 
     // Tracking
-    ofParameter<bool> bDetectBlob{"Detect Blob", true};
+    ofParameter<bool> bDetectBlob{"Tracking Enabled", true};
     ofParameterGroup trackingAdvancedGrp{"Tracking Advanced", processWidth, processHeight};
     ofParameterGroup trackingGrp{"Tracking", bDetectBlob, trackingAdvancedGrp};
 
