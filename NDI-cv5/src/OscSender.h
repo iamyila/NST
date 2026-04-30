@@ -19,10 +19,21 @@ namespace mtb{
         OscSender(){
             listenerHolder.push(oscIp.newListener([&](string& ip) { setup(); }));
             listenerHolder.push(oscPort.newListener([&](int& port) { setup(); }));
+            listenerHolder.push(oscTargetPreset.newListener([&](int& preset) { applyPortPreset(preset); }));
+            applyPortPreset(oscTargetPreset.get());
         }
         
         void setup(){
             sender.setup(oscIp, oscPort);
+        }
+
+        void applyPortPreset(int preset){
+            const int targetPort = (preset == 1) ? oscPortSuperCollider : oscPortMaxLive;
+            if (oscPort.get() != targetPort) {
+                oscPort = targetPort;
+            } else {
+                setup();
+            }
         }
 
         // Call once per tracker frame so slot ownership can expire stale labels.
@@ -213,14 +224,19 @@ namespace mtb{
     public:
         // OSC sender settings
         ofParameter<string> oscIp{"IP", "localhost"};
-        ofParameter<int> oscPort{"port", 12345, 0, 12345};
+        ofParameter<int> oscTargetPreset{"Target (0 Max/Live, 1 SC)", 0, 0, 1};
+        ofParameter<int> oscPort{"port", 12345, 0, 65535};
         // Legacy Max route object in AMXD matches symbols without a leading slash.
         const std::string oscAddressBase = "NDITracker";
         const std::string oscMergeAddress = "NDITrackerMerge";
         const std::string oscDeathAddress = "NDITrackerDeath";
-        ofParameterGroup grp{"OSC send", oscIp, oscPort};
+        ofParameterGroup grp{"OSC send", oscIp, oscTargetPreset, oscPort};
         
         ofEventListeners listenerHolder;
+
+    private:
+        static constexpr int oscPortMaxLive = 12345;
+        static constexpr int oscPortSuperCollider = 57120;
     };
     
 }
