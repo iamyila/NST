@@ -37,6 +37,13 @@ namespace mtb{
             }
         }
 
+        std::string formatOscAddress(const std::string& address) const{
+            if (oscTargetPreset.get() == 1) {
+                return "/" + address;
+            }
+            return address;
+        }
+
         // Call once per tracker frame so slot ownership can expire stale labels.
         void beginFrame(){
             frameCounter++;
@@ -78,7 +85,7 @@ namespace mtb{
                 lastLabelBySlot[slot] = label;
             }
             // One address per slot keeps compatibility with "route NDITracker1 ... NDITracker10".
-            m.setAddress(oscAddressBase + ofToString(slot));
+            m.setAddress(formatOscAddress(oscAddressBase + ofToString(slot)));
             m.addIntArg(label);
             m.addFloatArg(center.x/inputSize.x);
             m.addFloatArg(center.y/inputSize.y);
@@ -153,7 +160,7 @@ namespace mtb{
 
         void sendMergeEvent(int prevCount, int currentCount, int label){
             ofxOscMessage m;
-            m.setAddress(oscMergeAddress);
+            m.setAddress(formatOscAddress(oscMergeAddress));
             m.addIntArg(prevCount);
             m.addIntArg(currentCount);
             m.addIntArg(label);
@@ -163,7 +170,7 @@ namespace mtb{
 
         void sendDeathEvent(int label, int slot){
             ofxOscMessage m;
-            m.setAddress(oscDeathAddress);
+            m.setAddress(formatOscAddress(oscDeathAddress));
             m.addIntArg(label);
             m.addIntArg(slot);
             NSLog(@"NDITrackerDeath label=%d slot=%d frame=%llu", label, slot, frameCounter);
@@ -222,7 +229,7 @@ namespace mtb{
         ofParameter<string> oscIp{"IP", "localhost"};
         ofParameter<int> oscTargetPreset{"Target (0 Max/Live, 1 SC)", 0, 0, 1};
         ofParameter<int> oscPort{"port", 12345, 0, 65535};
-        // Legacy Max route object in AMXD matches symbols without a leading slash.
+        // Max/Live route chains expect bare symbols; SuperCollider expects OSC-compliant slash addresses.
         const std::string oscAddressBase = "NDITracker";
         const std::string oscMergeAddress = "NDITrackerMerge";
         const std::string oscDeathAddress = "NDITrackerDeath";
