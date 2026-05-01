@@ -22,6 +22,21 @@ Nature Scene Tracker repository.
 - `max/`
 - `archive/`
 
+## Main Max Devices
+The main Max for Live devices currently worth looking at are:
+- `max/amxd/ndi_blob12_master.amxd`
+  - main blob-slot receiver / mapper
+- `max/amxd/ndi_flood_controller.amxd`
+  - flood / edge-hit control device
+- `max/NDI-osc-mapper28.5.amxd`
+  - broader OSC mapping device
+- `max/amxd/ndi_merge_event_note.amxd`
+  - merge/death event note handling
+
+Related editable patchers live in `max/`.
+
+For the current Max/Live target, these devices expect OSC on port `12345`.
+
 ## Status
 - `NDI-cv5`: current classic blob tracker
 - `NDI-test-sender`: current classic sender for the blob tracker
@@ -46,6 +61,7 @@ This currently includes:
 If you are new to the project:
 - use `NDI-cv5` for the classic blob workflow
 - use `NDI-test-sender` with `NDI-cv5`
+- use the Max for Live devices in `max/amxd/` if you want the current Live integration
 - use `NST1` if you want the newer AI / dance / `NSTD` direction
 - use `NDI-test-sender-3d` with `NST1` / `NSTD`
 - ignore `archive/` unless you specifically need an old version
