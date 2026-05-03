@@ -213,7 +213,7 @@ namespace mtb{
     public:
         // OSC sender settings
         ofParameter<string> oscIp{"IP", "localhost"};
-        ofParameter<int> oscPort{"port", 12345, 0, 12345};
+        ofParameter<int> oscPort{"port", 12345, 0, 65535};
         // Legacy Max route object in AMXD matches symbols without a leading slash.
         const std::string oscAddressBase = "NDITracker";
         const std::string oscMergeAddress = "NDITrackerMerge";
