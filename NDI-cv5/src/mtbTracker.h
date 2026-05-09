@@ -51,6 +51,13 @@ namespace mtb{
             pBackSub->apply(currentMat, foregroundMat, bgLearningRate);
             if(0<blurAmt) ofxCv::blur(foregroundMat, foregroundMat, blurAmt);
 
+            if (bUseIntensity) {
+                cv::Mat gray, thresh;
+                cv::cvtColor(currentMat, gray, cv::COLOR_RGB2GRAY);
+                cv::threshold(gray, thresh, intensityThreshold, 255, cv::THRESH_BINARY);
+                cv::bitwise_or(foregroundMat, thresh, foregroundMat);
+            }
+
             if(bDrawReferenceImage){
                 foregroundImageOf.update();
             }
@@ -505,9 +512,11 @@ namespace mtb{
 
         ofParameter<int> bgAlgo{"Background Subtractor Algo", 0, 0, 1};
         ofParameter<float> blurAmt{ "Blur amount", 3, 0, 20 };
+        ofParameter<bool> bUseIntensity{"Use Intensity Mask", false};
+        ofParameter<int> intensityThreshold{"Intensity Threshold", 128, 0, 255};
         ofParameter<float> bgLearningRate{ "BG Learning Rate", 0.001f, 0.0f, 0.05f };
         ofParameter<bool> bDrawReferenceImage{ "Draw Reference Image", false };
-        ofParameterGroup bgGrp{"BG", bgAlgo, blurAmt, bgLearningRate, bDrawReferenceImage};
+        ofParameterGroup bgGrp{"BG", bgAlgo, blurAmt, bUseIntensity, intensityThreshold, bgLearningRate, bDrawReferenceImage};
     };
 
 }

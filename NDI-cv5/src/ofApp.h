@@ -13,6 +13,7 @@ public:
     void setup();
 	void update();
 	void draw();
+    void exit();
     void connectNDI();
     void refreshNDISources();
     void applySelectedNDISource();
@@ -24,6 +25,7 @@ public:
     void applyGuiScale(float scale);
     
     bool bHide = false;
+    bool bLoadingSettings = false;
     vector<std::shared_ptr<NDISource>> ndis;
 
     ofxPanel gui;
