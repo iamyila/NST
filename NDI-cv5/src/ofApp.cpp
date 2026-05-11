@@ -21,9 +21,9 @@ void ofApp::setup(){
     applyGuiScale(guiScaleEnabled ? ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f) : 1.0f);
     setupGui();
     updateLayout();
-    // Loading saved GUI state is disabled for now because schema drift between builds
-    // can trigger a startup crash in ofxGui deserialization.
-    // gui.loadFromFile(kGuiSettingsFile);
+    bLoadingSettings = true;
+    gui.loadFromFile(kGuiSettingsFile);
+    bLoadingSettings = false;
 
     for (auto &ndi : ndis) {
         ndi->bHeatmap = false;
@@ -169,6 +169,7 @@ void ofApp::draw(){
         "Shortcuts:\n"
         "h = hide/show GUI\n"
         "f = fullscreen\n"
+        "s = save settings\n"
         "space = reconnect NDI\n"
         "g = glitch burst (if enabled)\n"
         "c = draw candidates";
@@ -178,6 +179,10 @@ void ofApp::draw(){
     ofDrawBitmapStringHighlight(shortcuts, helpX, helpY);
     ofPopStyle();
 
+}
+
+void ofApp::exit(){
+    gui.saveToFile(kGuiSettingsFile);
 }
 
 void ofApp::windowResized(int w, int h){
@@ -201,7 +206,7 @@ void ofApp::updateLayout(){
 
 void ofApp::setupGui(){
     gui.clear();
-    gui.setup("settings", kGuiSettingsFile);
+    gui.setup("settings");
     gui.add(appPrm.grp);
     ndiGrp.clear();
     ndiGrp.setName("NDI");
@@ -240,9 +245,11 @@ void ofApp::setupGui(){
     }));
     listenerHolder.push(connectNDIBtn.newListener([&](void){ connectNDI();}));
     listenerHolder.push(guiScaleEnabled.newListener([&](bool& b){
-        applyGuiScale(b ? ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f) : 1.0f);
-        setupGui();
-        updateLayout();
+        if (!bLoadingSettings) {
+            applyGuiScale(b ? ofClamp(ofGetWidth() / 700.0f, 0.8f, 1.6f) : 1.0f);
+            setupGui();
+            updateLayout();
+        }
     }));
 }
 
@@ -268,6 +275,10 @@ void ofApp::keyPressed(int key){
 
         case 'f':
             ofToggleFullscreen();
+            break;
+
+        case 's':
+            gui.saveToFile(kGuiSettingsFile);
             break;
 
 		case ' ':
