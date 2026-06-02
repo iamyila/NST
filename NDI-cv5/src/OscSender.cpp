@@ -19,6 +19,7 @@ namespace mtb{
                 labelLastSeenFrame[label] = frameCounter;
                 return it->second;
             }
+            lastContinuousSendMicrosBySlot.erase(it->second);
             labelToSlot.erase(it);
             labelLastSeenFrame.erase(label);
         }
@@ -34,6 +35,11 @@ namespace mtb{
             }
         }
         for (int staleLabel : staleLabels) {
+            auto itStale = labelToSlot.find(staleLabel);
+            if (itStale != labelToSlot.end()) {
+                lastLabelBySlot.erase(itStale->second);
+                lastContinuousSendMicrosBySlot.erase(itStale->second);
+            }
             labelLastSeenFrame.erase(staleLabel);
             labelToSlot.erase(staleLabel);
         }
@@ -47,6 +53,7 @@ namespace mtb{
 
         for (int slot = 1; slot <= maxBlobNum; ++slot) {
             if (!used[slot]) {
+                lastContinuousSendMicrosBySlot.erase(slot);
                 labelToSlot[label] = slot;
                 labelLastSeenFrame[label] = frameCounter;
                 return slot;
@@ -64,6 +71,7 @@ namespace mtb{
         if (fallbackRoundRobinSlot > maxBlobNum) {
             fallbackRoundRobinSlot = 1;
         }
+        lastContinuousSendMicrosBySlot.erase(slot);
         labelToSlot[label] = slot;
         labelLastSeenFrame[label] = frameCounter;
         return slot;
@@ -73,6 +81,7 @@ namespace mtb{
         auto it = labelToSlot.find(label);
         if (it != labelToSlot.end()) {
             lastLabelBySlot.erase(it->second);
+            lastContinuousSendMicrosBySlot.erase(it->second);
         }
         labelToSlot.erase(label);
         labelLastSeenFrame.erase(label);

@@ -18,10 +18,6 @@
 
 #include <opencv2/imgproc.hpp>
 
-namespace mtb {
-
-namespace {
-
 @class VNRecognizedPoint;
 @class VNHumanBodyPoseObservation;
 @class VNDetectHumanBodyPoseRequest;
@@ -63,6 +59,10 @@ extern NSString* const VNHumanBodyPoseObservationJointNameRightAnkle;
                               options:(NSDictionary<NSString*, id>*)options;
 - (BOOL)performRequests:(NSArray*)requests error:(NSError**)error;
 @end
+
+namespace mtb {
+
+namespace {
 
 std::string nsErrorToString(NSError* error) {
     if (!error) return "unknown Vision error";
@@ -119,7 +119,7 @@ bool createPixelBufferFromMat(const cv::Mat& bgrMat,
 }
 
 PoseJoint readJoint(VNHumanBodyPoseObservation* observation,
-                    VNHumanBodyPoseObservationJointName jointName,
+                    NSString* jointName,
                     const cv::Size& imageSize,
                     float minConfidence) {
     PoseJoint joint;

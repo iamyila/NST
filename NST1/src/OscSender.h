@@ -72,8 +72,12 @@ namespace mtb{
         }
         
         int sendVal(int label, int maxBlobNum, glm::vec2 vel, float area, int age, glm::vec2 center, glm::vec2 inputSize){
-            ofxOscMessage m;
             int slot = getOscAddressSlot(label, maxBlobNum);
+            if (!shouldSendContinuous(slot)) {
+                return slot;
+            }
+
+            ofxOscMessage m;
             // Debug slot churn: only log when a slot changes owner, and only when log level allows.
             auto itPrev = lastLabelBySlot.find(slot);
             if (itPrev == lastLabelBySlot.end() || itPrev->second != label) {
@@ -113,6 +117,7 @@ namespace mtb{
             labelToSlot.clear();
             labelLastSeenFrame.clear();
             lastLabelBySlot.clear();
+            lastContinuousSendMicrosBySlot.clear();
             labelToSlot[label] = 1;
             labelLastSeenFrame[label] = frameCounter;
             lastLabelBySlot[1] = label;
@@ -121,6 +126,7 @@ namespace mtb{
 
         void forceLabelToSlot(int label, int slot){
             if (slot < 1) slot = 1;
+            lastContinuousSendMicrosBySlot.erase(slot);
             std::vector<int> toErase;
             for (const auto& kv : labelToSlot) {
                 if (kv.first != label && kv.second == slot) {
@@ -144,6 +150,7 @@ namespace mtb{
             labelToSlot.clear();
             labelLastSeenFrame.clear();
             lastLabelBySlot.clear();
+            lastContinuousSendMicrosBySlot.clear();
             for (std::size_t i = 0; i < labels.size(); ++i) {
                 const int label = labels[i];
                 const int slot = static_cast<int>(i) + 1;
@@ -214,11 +221,29 @@ namespace mtb{
             const float hit = (edge >= 0.975f) ? 1.0f : 0.0f;
             return glm::vec2(ofClamp(edge, 0.0f, 1.0f), hit);
         }
+
+        bool shouldSendContinuous(int slot){
+            if (!bLimitOscRate) {
+                return true;
+            }
+
+            const float hz = std::max(1.0f, oscMaxHz.get());
+            const uint64_t now = ofGetElapsedTimeMicros();
+            const uint64_t minInterval = static_cast<uint64_t>(1000000.0f / hz);
+            auto it = lastContinuousSendMicrosBySlot.find(slot);
+            if (it != lastContinuousSendMicrosBySlot.end() && now - it->second < minInterval) {
+                return false;
+            }
+
+            lastContinuousSendMicrosBySlot[slot] = now;
+            return true;
+        }
         
         ofxOscSender sender;
         std::map<int, int> labelToSlot;
         std::map<int, uint64_t> labelLastSeenFrame;
         std::map<int, int> lastLabelBySlot;
+        std::map<int, uint64_t> lastContinuousSendMicrosBySlot;
         uint64_t frameCounter = 0;
         // More tolerant stale window reduces slot churn under brief detection dropouts.
         int slotStaleFrames = 48;
@@ -229,11 +254,13 @@ namespace mtb{
         ofParameter<string> oscIp{"IP", "localhost"};
         ofParameter<int> oscTargetPreset{"Target (0 Max/Live, 1 SC)", 0, 0, 1};
         ofParameter<int> oscPort{"port", 12345, 0, 65535};
+        ofParameter<bool> bLimitOscRate{"Limit OSC Rate", false};
+        ofParameter<float> oscMaxHz{"OSC Max Hz", 30.0f, 1.0f, 120.0f};
         // Max/Live route chains expect bare symbols; SuperCollider expects OSC-compliant slash addresses.
         const std::string oscAddressBase = "NDITracker";
         const std::string oscMergeAddress = "NDITrackerMerge";
         const std::string oscDeathAddress = "NDITrackerDeath";
-        ofParameterGroup grp{"OSC send", oscIp, oscTargetPreset, oscPort};
+        ofParameterGroup grp{"OSC send", oscIp, oscTargetPreset, oscPort, bLimitOscRate, oscMaxHz};
         
         ofEventListeners listenerHolder;
 
